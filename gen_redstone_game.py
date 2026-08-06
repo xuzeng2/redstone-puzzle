@@ -1,0 +1,1099 @@
+#!/usr/bin/env python3
+"""
+红石逻辑解谜游戏生成器
+用法: python gen_redstone_game.py <关卡定义文件.json> [输出文件.html]
+如果不指定输出文件，默认输出 redstone-puzzle.html
+
+关卡定义文件格式 (JSON):
+{
+  "levels": [
+    {
+      "name": "关卡名称",
+      "desc": "关卡描述",
+      "cols": 12, "rows": 8,
+      "input": {"x": 1, "y": 4, "duration": 10, "strength": 15},
+      "output": {"x": 10, "y": 4},
+      "target": {"delay": 4, "duration": 10},
+      "components": ["dust", "repeater"],
+      "limits": {"repeater": 2},
+      "hint": "提示文字",
+      "par": 10,
+      "logic": "not"          // 可选, "not"/"or"/"and"
+    },
+    // 多输入关卡用 "inputs" 代替 "input":
+    {
+      "name": "或门",
+      "desc": "两路汇合",
+      "cols": 12, "rows": 8,
+      "inputs": [
+        {"x": 1, "y": 2, "duration": 10, "strength": 15, "delay": 0},
+        {"x": 1, "y": 6, "duration": 10, "strength": 15, "delay": 5}
+      ],
+      "output": {"x": 10, "y": 4},
+      "target": {"delay": 10, "duration": 15},
+      "components": ["dust"],
+      "hint": "...",
+      "par": 14,
+      "logic": "or"
+    }
+  ]
+}
+
+字段说明:
+  name        关卡名称 (必填)
+  desc        关卡描述 (必填)
+  cols/rows   网格列数/行数 (必填)
+  input       单输入配置 {x, y, duration, strength} (单输入关卡必填)
+  inputs      多输入数组 [{x, y, duration, strength, delay}] (多输入关卡必填, 与input二选一)
+  output      输出点 {x, y} (必填)
+  target      目标 {delay, duration} (必填)
+  components  可用元件列表 (必填), 可选值: dust/block/torch/repeater/comparator/observer
+  limits      元件数量限制 {元件类型: 数量} (可选)
+  hint        通关提示 (必填)
+  par         推荐元件数 (可选, 默认10)
+  logic       逻辑门类型 (可选) "not"/"or"/"and", 设置后会显示对应逻辑门介绍
+  preplaced   预放置元件数组 (可选), 玩家无法移除这些元件
+              格式: [{"x": 5, "y": 3, "type": "block", "direction": 0, "delay": 1, "mode": "compare"}]
+              type 必填, direction/delay/mode 可选 (有方向的元件需指定 direction: 0=右 1=下 2=左 3=上)
+"""
+
+import json
+import sys
+import os
+
+
+# ============================================================
+#  HTML 模板（固定部分：CSS + JS 引擎）
+#  关卡数据会注入到 LEVELS 占位符位置
+# ============================================================
+HTML_TEMPLATE = r'''<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>红石逻辑解谜 — Redstone Logic Puzzle</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background:#1a1a2e; color:#e0e0e0; font-family:'Segoe UI',sans-serif;
+    display:flex; flex-direction:column; align-items:center; min-height:100vh;
+    user-select:none;
+  }
+  #header {
+    width:100%; max-width:900px; padding:10px 16px;
+    display:flex; justify-content:space-between; align-items:center;
+    background:#16213e; border-bottom:3px solid #0f3460;
+  }
+  #header h1 { font-size:18px; color:#e94560; letter-spacing:1px; }
+  #levelSelector { display:flex; gap:4px; flex-wrap:wrap; }
+  .level-btn {
+    width:28px; height:28px; border:2px solid #0f3460; background:#1a1a2e;
+    color:#aaa; font-size:12px; cursor:pointer; border-radius:3px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .level-btn:hover { border-color:#e94560; color:#e94560; }
+  .level-btn.current { background:#e94560; color:#fff; border-color:#e94560; }
+  .level-btn.completed { background:#0f3460; color:#4ecca3; border-color:#4ecca3; }
+  .level-btn.locked { opacity:.3; cursor:not-allowed; }
+  #infoBar {
+    width:100%; max-width:900px; padding:8px 16px;
+    background:#0f3460; display:flex; gap:20px; flex-wrap:wrap;
+    font-size:13px; align-items:center;
+  }
+  #infoBar .label { color:#888; }
+  #infoBar .target { color:#e94560; font-weight:bold; }
+  #infoBar .current { color:#4ecca3; font-weight:bold; }
+  #infoBar .matched { color:#ffd700; font-weight:bold; }
+  #infoBar .level-desc { color:#ccc; flex:1; min-width:200px; }
+  #canvasWrap {
+    margin:10px 0; border:4px solid #0f3460; border-radius:4px;
+    background:#0d1117; box-shadow:0 0 20px rgba(233,69,96,.2);
+  }
+  canvas { display:block; cursor:pointer; image-rendering:pixelated; }
+  #controls {
+    width:100%; max-width:900px; padding:8px 16px;
+    background:#16213e; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
+  }
+  .btn {
+    padding:6px 14px; border:2px solid #0f3460; background:#1a1a2e;
+    color:#e0e0e0; cursor:pointer; border-radius:4px; font-size:13px;
+    display:flex; align-items:center; gap:4px;
+  }
+  .btn:hover { border-color:#e94560; color:#e94560; }
+  .btn:active { transform:scale(.95); }
+  .btn.primary { background:#e94560; color:#fff; border-color:#e94560; }
+  .btn.primary:hover { background:#ff5570; }
+  #componentBar {
+    width:100%; max-width:900px; padding:8px 16px;
+    background:#0f3460; display:flex; gap:6px; flex-wrap:wrap; align-items:center;
+  }
+  #componentBar .label { color:#888; font-size:12px; margin-right:4px; }
+  .comp-btn {
+    width:52px; height:52px; border:2px solid #1a1a2e; background:#16213e;
+    cursor:pointer; border-radius:4px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:2px; position:relative;
+  }
+  .comp-btn canvas { pointer-events:none; }
+  .comp-btn:hover { border-color:#e94560; }
+  .comp-btn.selected { border-color:#4ecca3; box-shadow:0 0 8px rgba(78,204,163,.5); }
+  .comp-btn .count { position:absolute; top:0; right:2px; font-size:10px; color:#4ecca3; }
+  .comp-btn .name { font-size:8px; color:#888; }
+  #hint {
+    width:100%; max-width:900px; padding:6px 16px;
+    background:#0d1117; color:#888; font-size:12px; text-align:center;
+  }
+  /* 过关弹窗 */
+  #winModal {
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,.7); z-index:100; justify-content:center; align-items:center;
+  }
+  #winModal.show { display:flex; }
+  #winModal .panel {
+    background:#16213e; border:4px solid #4ecca3; border-radius:12px;
+    padding:48px 60px; text-align:center; max-width:520px;
+    box-shadow:0 0 40px rgba(78,204,163,.4);
+    animation:winPop .4s ease-out;
+  }
+  @keyframes winPop {
+    0% { transform:scale(0.5); opacity:0; }
+    70% { transform:scale(1.05); }
+    100% { transform:scale(1); opacity:1; }
+  }
+  #winModal h2 { color:#4ecca3; font-size:42px; margin-bottom:20px; letter-spacing:4px; }
+  #winModal p { color:#ccc; margin-bottom:24px; line-height:1.8; font-size:18px; }
+  #winModal .stars { font-size:52px; margin-bottom:24px; color:#ffd700; letter-spacing:8px; }
+  #winModal .btn { margin:0 6px; font-size:16px; padding:10px 24px; }
+  /* 元件介绍弹窗 */
+  #introModal {
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,.8); z-index:110; justify-content:center; align-items:center;
+  }
+  #introModal.show { display:flex; }
+  #introModal .panel {
+    background:#16213e; border:3px solid #e94560; border-radius:8px;
+    padding:24px 32px; text-align:center; max-width:440px;
+  }
+  #introModal h2 { color:#e94560; font-size:20px; margin-bottom:6px; }
+  #introModal .subtitle { color:#888; font-size:12px; margin-bottom:14px; }
+  #introModal .intro-icon { margin:0 auto 14px; }
+  #introModal .intro-icon canvas { display:block; margin:0 auto; }
+  #introModal .intro-desc { color:#ccc; font-size:14px; line-height:1.7; margin-bottom:16px; text-align:left; }
+  #introModal .intro-desc b { color:#4ecca3; }
+  #introModal .intro-tip { color:#ffd700; font-size:12px; margin-bottom:14px; }
+  #introModal .btn { margin:0 auto; }
+  /* 引导提示 */
+  #tip {
+    display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+    background:#16213e; border:2px solid #e94560; border-radius:6px;
+    padding:8px 16px; color:#e94560; font-size:13px; z-index:50;
+    animation:fadeIn .3s;
+  }
+  #tip.show { display:block; }
+  @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>红石逻辑解谜</h1>
+  <div id="levelSelector"></div>
+</div>
+
+<div id="infoBar">
+  <span class="level-desc" id="levelDesc"></span>
+  <span><span class="label">目标延迟:</span> <span class="target" id="targetDelay">-</span></span>
+  <span><span class="label">目标持续:</span> <span class="target" id="targetDuration">-</span></span>
+  <span><span class="label">当前延迟:</span> <span class="current" id="currentDelay">-</span></span>
+  <span><span class="label">当前持续:</span> <span class="current" id="currentDuration">-</span></span>
+  <span><span class="label">Tick:</span> <span class="current" id="tickDisplay">0</span></span>
+</div>
+
+<div id="canvasWrap">
+  <canvas id="game" width="864" height="540"></canvas>
+</div>
+
+<div id="controls">
+  <button class="btn primary" id="playBtn">&#9654; 播放</button>
+  <button class="btn" id="resetBtn">&#8634; 重置</button>
+  <button class="btn" id="stepBtn">&#9193; 单步</button>
+  <button class="btn" id="rotateBtn">&#10227; 旋转(R)</button>
+  <span style="width:10px"></span>
+  <button class="btn" id="saveBtn">&#128190; 存档</button>
+  <button class="btn" id="loadBtn">&#128194; 读档</button>
+  <input type="file" id="fileInput" accept=".json" style="display:none">
+  <span style="flex:1"></span>
+  <span style="font-size:12px;color:#888">左键放置 | 右键移除 | R键旋转</span>
+</div>
+
+<div id="componentBar">
+  <span class="label">元件:</span>
+</div>
+
+<div id="hint" id="hintText"></div>
+
+<div id="winModal">
+  <div class="panel">
+    <h2>过关!</h2>
+    <div class="stars" id="winStars">★ ★ ★</div>
+    <p id="winInfo"></p>
+    <div style="display:flex;justify-content:center;gap:16px">
+      <button class="btn" id="retryBtn">重试</button>
+      <button class="btn primary" id="nextBtn">下一关 →</button>
+    </div>
+  </div>
+</div>
+
+<div id="tip"></div>
+
+<div id="introModal">
+  <div class="panel">
+    <div class="subtitle" id="introSubtitle">新元件解锁</div>
+    <h2 id="introTitle"></h2>
+    <div class="intro-icon"><canvas id="introIcon" width="48" height="48"></canvas></div>
+    <div class="intro-desc" id="introDesc"></div>
+    <div class="intro-tip" id="introTip"></div>
+    <button class="btn primary" id="introStartBtn">开始挑战</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  常量定义
+// ============================================================
+const CELL = 48;
+const TICK_MS = 120;
+const DIRECTIONS = [
+  { dx: 1, dy: 0 },
+  { dx: 0, dy: 1 },
+  { dx: -1, dy: 0 },
+  { dx: 0, dy: -1 },
+];
+
+const T = {
+  EMPTY: 'empty', DUST: 'dust', BLOCK: 'block', TORCH: 'torch',
+  REPEATER: 'repeater', COMPARATOR: 'comparator', OBSERVER: 'observer',
+  INPUT: 'input', OUTPUT: 'output',
+};
+
+const COMP_NAMES = {
+  dust: '红石粉', block: '红石块', torch: '红石火把',
+  repeater: '中继器', comparator: '比较器', observer: '侦测器',
+};
+
+const COMP_INTROS = {
+  dust: {
+    title: '红石粉',
+    desc: '最基础的信号传输元件。信号每经过1格红石粉<b>衰减1点</b>（从15开始），同时产生<b>1tick延迟</b>。信号会向所有相连的方向传播，摆放成路径即可连接输入和输出。',
+    tip: '左键放置 | 右键移除 | 按R键可旋转有方向的元件',
+  },
+  repeater: {
+    title: '中继器',
+    desc: '<b>单向</b>信号传输元件，只从背面输入、正面输出。点击可调节延迟档位（1~4tick），能将信号<b>恢复到15点</b>并增加精确延迟。延迟 = 档位值 + 1tick。',
+    tip: '放置后点击可切换延迟档位(1~4)，按R键旋转方向',
+  },
+  observer: {
+    title: '侦测器',
+    desc: '检测<b>前方</b>格子的信号变化。当检测到信号<b>上升沿</b>（从无到有）时，从背面输出一个<b>2tick短脉冲</b>信号（强度15）。常用于将长信号转换为短脉冲。',
+    tip: '侦测器"脸"朝信号来源方向，背面输出脉冲。按R键旋转',
+  },
+  torch: {
+    title: '红石火把',
+    desc: '<b>信号反相器</b>。当火把<b>背面</b>有信号时火把熄灭（输出0）；背面无信号时火把点亮（输出15）。可用于构建逻辑非门。注意：火把是单向元件，只从背面输入。',
+    tip: '火把头指向输出方向，杆部连接输入。按R键旋转',
+  },
+  block: {
+    title: '红石块',
+    desc: '<b>永久信号源</b>。红石块始终输出满强度信号（15点），无需任何输入即可供电。可作为常亮电源使用，也能传导信号。',
+    tip: '无需输入，始终输出信号强度15',
+  },
+  comparator: {
+    title: '比较器',
+    desc: '<b>信号处理</b>元件。背面为主输入，左右两侧为侧输入。<b>比较模式</b>：主输入≥侧输入时直通信号；<b>减法模式</b>：输出 = 主输入 - 侧输入。点击可切换模式，按R键旋转方向。',
+    tip: '三角尖端为输出方向，背面为主输入。点击切换比较/减法模式',
+  },
+};
+
+// ============================================================
+//  关卡数据（由生成器注入）
+// ============================================================
+const LEVELS = __LEVELS_PLACEHOLDER__;
+
+// ============================================================
+//  游戏状态
+// ============================================================
+let G = {
+  grid: [], signals: [], cols: 0, rows: 0,
+  levelIdx: 0, level: null, tick: 0,
+  running: false, timer: null,
+  selectedComp: null, selectedRotate: 0,
+  inputActive: false, inputRemaining: 0,
+  outputPowered: false, outputArrivalTick: -1,
+  outputDepartureTick: -1, outputDuration: 0, outputDelay: -1,
+  hoverX: -1, hoverY: -1,
+  completed: new Set((() => {
+    let ver = localStorage.getItem('rs_version');
+    if (ver !== '2') {
+      localStorage.removeItem('rs_completed');
+      localStorage.removeItem('rs_intro_seen');
+      localStorage.setItem('rs_version', '2');
+    }
+    return JSON.parse(localStorage.getItem('rs_completed') || '[]');
+  })()),
+  compCounts: {}, animFrame: 0,
+  inputStates: [], logicResult: null, levelLayouts: {},
+};
+
+function initGrid(level) {
+  G.cols = level.cols; G.rows = level.rows;
+  G.grid = []; G.signals = [];
+  for (let x = 0; x < G.cols; x++) {
+    G.grid[x] = []; G.signals[x] = [];
+    for (let y = 0; y < G.rows; y++) {
+      G.grid[x][y] = { type: T.EMPTY, direction: 0, delay: 1, mode: 'compare',
+        outputActive: false, prevInput: false, eventQueue: [],
+        extinguished: false, pulsing: false, pulseTimer: 0,
+        prevFrontSignal: 0, outputStrength: 0, cooldown: 0 };
+      G.signals[x][y] = 0;
+    }
+  }
+  if (level.input) { G.grid[level.input.x][level.input.y].type = T.INPUT; }
+  if (level.inputs) {
+    G.inputStates = level.inputs.map(inp => ({
+      x: inp.x, y: inp.y, duration: inp.duration,
+      delay: inp.delay || 0, origDelay: inp.delay || 0,
+      strength: inp.strength || 15, remaining: 0, active: false,
+    }));
+    for (let s of G.inputStates) G.grid[s.x][s.y].type = T.INPUT;
+  } else { G.inputStates = []; }
+  G.grid[level.output.x][level.output.y].type = T.OUTPUT;
+  if (level.preplaced) {
+    for (let p of level.preplaced) {
+      let c = G.grid[p.x][p.y]; c.type = p.type;
+      if (p.direction !== undefined) c.direction = p.direction;
+      if (p.delay !== undefined) c.delay = p.delay;
+      if (p.mode !== undefined) c.mode = p.mode;
+    }
+  }
+  G.compCounts = {};
+  resetSimulation();
+}
+
+function isSignalSource(cell) { return [T.BLOCK,T.TORCH,T.REPEATER,T.COMPARATOR,T.OBSERVER,T.INPUT].includes(cell.type); }
+function isConductive(cell) { return [T.DUST,T.BLOCK,T.TORCH,T.REPEATER,T.COMPARATOR,T.OBSERVER,T.INPUT].includes(cell.type); }
+function isDirectionalSource(cell) { return [T.REPEATER,T.COMPARATOR,T.OBSERVER,T.TORCH].includes(cell.type); }
+function getOutputDir(cell) { let d=DIRECTIONS[cell.direction]; return cell.type===T.OBSERVER?{dx:-d.dx,dy:-d.dy}:d; }
+function getNeighborSignal(nx,ny,x,y) { let n=G.grid[nx][ny]; if(!isConductive(n))return 0; if(isDirectionalSource(n)){let o=getOutputDir(n); if(nx+o.dx!==x||ny+o.dy!==y)return 0;} return G.signals[nx][ny]; }
+function getInputSignal(x,y,dir) { let ix=x-dir.dx,iy=y-dir.dy; if(ix<0||ix>=G.cols||iy<0||iy>=G.rows)return 0; let n=G.grid[ix][iy]; if(!isConductive(n))return 0; if(isDirectionalSource(n)){let o=getOutputDir(n); if(ix+o.dx!==x||iy+o.dy!==y)return 0;} return G.signals[ix][iy]; }
+function getOutputPower(cell,x,y) {
+  switch(cell.type){
+    case T.BLOCK: return 15;
+    case T.INPUT: { if(G.inputStates.length>0){for(let s of G.inputStates){if(s.x===x&&s.y===y)return s.active?s.strength:0;}return 0;} return G.inputActive?(G.level.input.strength||15):0; }
+    case T.TORCH: return cell.extinguished?0:15;
+    case T.REPEATER: return cell.outputActive?15:0;
+    case T.COMPARATOR: return cell.outputActive?(cell.outputStrength||0):0;
+    case T.OBSERVER: return cell.pulsing?15:0;
+    default: return 0;
+  }
+}
+
+function tickUpdate() {
+  G.animFrame++;
+  if (G.inputStates.length > 0) {
+    for (let s of G.inputStates) {
+      if (s.delay > 0) { s.delay--; s.active = false; }
+      else if (s.remaining > 0) { s.active = true; s.remaining--; }
+      else { s.active = false; }
+    }
+    G.inputActive = G.inputStates.some(s => s.active);
+  } else {
+    if (G.inputRemaining > 0) { G.inputActive = true; G.inputRemaining--; }
+    else { G.inputActive = false; }
+  }
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+    let cell = G.grid[x][y];
+    switch(cell.type){
+      case T.REPEATER: { let d=DIRECTIONS[cell.direction]; let ip=getInputSignal(x,y,d)>0; if(ip&&!cell.prevInput)cell.eventQueue.push({tick:G.tick+cell.delay,state:true}); if(!ip&&cell.prevInput)cell.eventQueue.push({tick:G.tick+cell.delay,state:false}); cell.prevInput=ip; while(cell.eventQueue.length>0&&cell.eventQueue[0].tick<=G.tick)cell.outputActive=cell.eventQueue.shift().state; break; }
+      case T.TORCH: { let d=DIRECTIONS[cell.direction]; cell.extinguished=getInputSignal(x,y,d)>0; break; }
+      case T.COMPARATOR: { let d=DIRECTIONS[cell.direction]; let mp=getInputSignal(x,y,d); let sp=0; let ps=[{dx:d.dy,dy:d.dx},{dx:-d.dy,dy:-d.dx}]; for(let p of ps){let sx=x+p.dx,sy=y+p.dy; if(sx>=0&&sx<G.cols&&sy>=0&&sy<G.rows){let ns=getNeighborSignal(sx,sy,x,y); if(ns>sp)sp=ns;}} if(cell.mode==='compare'){if(mp>=sp&&mp>0){cell.outputActive=true;cell.outputStrength=mp;}else{cell.outputActive=false;cell.outputStrength=0;}}else{let r=Math.max(0,mp-sp);cell.outputActive=r>0;cell.outputStrength=r;} break; }
+      case T.OBSERVER: { let d=DIRECTIONS[cell.direction]; let fx=x+d.dx,fy=y+d.dy; let fs=0; if(fx>=0&&fx<G.cols&&fy>=0&&fy<G.rows)fs=G.signals[fx][fy]||0; if(fs>0&&cell.prevFrontSignal===0){cell.pulsing=true;cell.pulseTimer=2;}else if(cell.pulseTimer>0){cell.pulseTimer--;if(cell.pulseTimer<=0)cell.pulsing=false;} cell.prevFrontSignal=fs; break; }
+    }
+  }
+  let newSig = [];
+  for (let x = 0; x < G.cols; x++) {
+    newSig[x] = [];
+    for (let y = 0; y < G.rows; y++) {
+      newSig[x][y] = 0;
+      let cell = G.grid[x][y];
+      if (isSignalSource(cell)) { newSig[x][y] = getOutputPower(cell, x, y); }
+      else if (cell.type === T.DUST) {
+        let prevSig = G.signals[x][y];
+        if (cell.cooldown > 0) { cell.cooldown--; newSig[x][y] = 0; }
+        else if (prevSig > 0) {
+          let mx = 0;
+          for (let i = 0; i < 4; i++) { let d=DIRECTIONS[i]; let nx=x+d.dx,ny=y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; let s=getNeighborSignal(nx,ny,x,y); if(s>mx)mx=s; }
+          if (mx > prevSig) newSig[x][y] = mx - 1;
+          else { newSig[x][y] = 0; cell.cooldown = 2; }
+        } else {
+          let mx = 0;
+          for (let i = 0; i < 4; i++) { let d=DIRECTIONS[i]; let nx=x+d.dx,ny=y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; let s=getNeighborSignal(nx,ny,x,y); if(s>mx)mx=s; }
+          newSig[x][y] = mx > 0 ? mx - 1 : 0;
+        }
+      }
+    }
+  }
+  G.signals = newSig;
+  checkOutput();
+  updateInfoBar();
+  G.tick++;
+  let maxDuration = G.inputStates.length > 0 ? Math.max(...G.inputStates.map(s => (s.origDelay||0) + s.duration)) : G.level.input.duration;
+  if (!G.inputActive && G.tick > maxDuration + 10) {
+    let anySignal = false, anyEvent = false;
+    for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { if (G.signals[x][y] > 0) anySignal = true; if (G.grid[x][y].eventQueue && G.grid[x][y].eventQueue.length > 0) anyEvent = true; }
+    if (!anySignal && !anyEvent && !G.outputPowered) pauseSimulation();
+  }
+  if (G.tick > maxDuration + 50) pauseSimulation();
+}
+
+function checkOutput() {
+  let out = G.level.output; let hasSignal = false;
+  for (let d of DIRECTIONS) { let nx=out.x+d.dx,ny=out.y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; if(G.signals[nx][ny]>0){hasSignal=true;break;} }
+  if (hasSignal && !G.outputPowered) { G.outputPowered = true; G.outputArrivalTick = G.tick; G.outputDelay = G.tick; }
+  if (!hasSignal && G.outputPowered) { G.outputPowered = false; G.outputDepartureTick = G.tick; G.outputDuration = G.outputDepartureTick - G.outputArrivalTick; checkWin(); }
+}
+
+function checkWin() {
+  let target = G.level.target;
+  if (G.outputDelay === target.delay && G.outputDuration === target.duration) {
+    G.completed.add(G.levelIdx);
+    localStorage.setItem('rs_completed', JSON.stringify([...G.completed]));
+    pauseSimulation(); showWinModal();
+  }
+}
+
+function startSimulation() {
+  if (G.running) return;
+  if (G.tick === 0) {
+    if (G.inputStates.length > 0) { for (let s of G.inputStates) { s.remaining = s.duration; s.delay = s.origDelay; s.active = false; } }
+    else { G.inputRemaining = G.level.input.duration; }
+  }
+  G.running = true;
+  document.getElementById('playBtn').textContent = '\u23F8 暂停';
+  G.timer = setInterval(() => { tickUpdate(); render(); }, TICK_MS);
+}
+function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.timer); G.timer = null; } document.getElementById('playBtn').textContent = '\u25B6 播放'; }
+function resetSimulation() {
+  pauseSimulation(); G.tick = 0; G.inputActive = false; G.inputRemaining = 0;
+  for (let s of G.inputStates) { s.remaining = 0; s.active = false; s.delay = 0; }
+  G.outputPowered = false; G.outputArrivalTick = -1; G.outputDepartureTick = -1; G.outputDelay = -1; G.outputDuration = 0; G.animFrame = 0;
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { G.signals[x][y] = 0; let c = G.grid[x][y]; c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0; }
+  render(); updateInfoBar();
+}
+function stepSimulation() {
+  if (G.tick === 0) {
+    if (G.inputStates.length > 0) { for (let s of G.inputStates) { s.remaining = s.duration; s.delay = s.origDelay; s.active = false; } }
+    else { G.inputRemaining = G.level.input.duration; }
+  }
+  tickUpdate(); render();
+}
+
+function captureLayout() {
+  let layout = [];
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+    let c = G.grid[x][y];
+    if (c.type === T.EMPTY || c.type === T.INPUT || c.type === T.OUTPUT) continue;
+    layout.push({ x, y, type: c.type, direction: c.direction, delay: c.delay, mode: c.mode });
+  }
+  G.levelLayouts[G.levelIdx] = layout;
+}
+function restoreLayout(idx) {
+  let layout = G.levelLayouts[idx];
+  if (!layout || layout.length === 0) return;
+  for (let item of layout) {
+    if (item.x < 0 || item.x >= G.cols || item.y < 0 || item.y >= G.rows) continue;
+    let c = G.grid[item.x][item.y];
+    if (c.type === T.INPUT || c.type === T.OUTPUT) continue;
+    c.type = item.type; c.direction = item.direction || 0; c.delay = item.delay || 1; c.mode = item.mode || 'compare';
+    c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0;
+    G.compCounts[item.type] = (G.compCounts[item.type] || 0) + 1;
+  }
+}
+
+function loadLevel(idx) {
+  if (idx < 0 || idx >= LEVELS.length) return;
+  if (idx > 0 && !G.completed.has(idx - 1) && !G.completed.has(idx)) { showTip('请先完成前一关！'); return; }
+  if (G.level !== null) captureLayout();
+  G.levelIdx = idx; G.level = LEVELS[idx]; G.selectedComp = null;
+  initGrid(G.level); restoreLayout(idx);
+  buildComponentBar(); buildLevelSelector(); updateInfoBar();
+  document.getElementById('hint').textContent = '提示: ' + (G.level.hint || '');
+  document.getElementById('hint').style.color = '#888';
+  pauseSimulation(); resizeCanvas(); render();
+  let newComps = getNewComponents(idx);
+  if (newComps.length > 0) showIntroModal(newComps);
+  if (LEVELS[idx].logic && !introSeen.has('logic_' + LEVELS[idx].logic)) showLogicIntro(LEVELS[idx].logic);
+}
+
+function getNewComponents(idx) {
+  let currentComps = new Set(LEVELS[idx].components);
+  let prevComps = new Set();
+  for (let i = 0; i < idx; i++) for (let c of LEVELS[i].components) prevComps.add(c);
+  let newOnes = [];
+  for (let c of currentComps) if (!prevComps.has(c) && COMP_INTROS[c]) newOnes.push(c);
+  return newOnes;
+}
+
+let introQueue = [];
+let introSeen = new Set(JSON.parse(localStorage.getItem('rs_intro_seen') || '[]'));
+function showIntroModal(comps) {
+  let toShow = comps.filter(c => !introSeen.has(c));
+  if (toShow.length === 0) return;
+  introQueue = toShow.slice(); showNextIntro();
+}
+function showNextIntro() {
+  if (introQueue.length === 0) { document.getElementById('introModal').classList.remove('show'); return; }
+  let comp = introQueue.shift();
+  let info = COMP_INTROS[comp];
+  if (!info) { showNextIntro(); return; }
+  document.getElementById('introTitle').textContent = info.title;
+  document.getElementById('introDesc').innerHTML = info.desc;
+  document.getElementById('introTip').textContent = info.tip;
+  let cv = document.getElementById('introIcon');
+  let ictx = cv.getContext('2d');
+  ictx.clearRect(0, 0, 48, 48);
+  drawComponentIcon(ictx, comp, 0, 48);
+  let remaining = introQueue.length;
+  document.getElementById('introSubtitle').textContent = remaining > 0 ? '新元件解锁 (还有更多)' : '新元件解锁';
+  document.getElementById('introModal').classList.add('show');
+  introSeen.add(comp);
+  localStorage.setItem('rs_intro_seen', JSON.stringify([...introSeen]));
+}
+document.getElementById('introStartBtn').onclick = () => {
+  if (introQueue.length > 0) showNextIntro();
+  else document.getElementById('introModal').classList.remove('show');
+};
+
+const LOGIC_INTROS = {
+  not: { title: '非门 (NOT)', desc: '<b>非门</b>是逻辑反相器：输入有信号时输出<b>无</b>信号，输入无信号时输出<b>有</b>信号。<br><br>在红石中，<b>红石火把</b>天然就是非门：背面有信号时火把熄灭(输出0)，背面无信号时火把点亮(输出15)。<br><br>本关利用火把的默认点亮特性：火把在输入信号到达前就输出信号，输入信号到达后火把熄灭，从而制造一个短脉冲输出。', tip: '关键元件：红石火把。火把背面接输入路径，火把头朝输出方向' },
+  or: { title: '或门 (OR)', desc: '<b>或门</b>：任一输入有信号时，输出就有信号。只有所有输入都无信号时，输出才无信号。<br><br>在红石中，或门可以用<b>两路红石粉汇合</b>实现：输入A和输入B各自铺路到同一条线上，汇合处任意一路有信号就能继续传播。<br><br>本关输入A和B有不同延迟，两路信号的时间段部分重叠。输出持续时间 = 两路信号的合并时间(并集)。', tip: '关键：两路红石粉路径在某个点汇合，汇合后继续连到输出' },
+  and: { title: '与门 (AND)', desc: '<b>与门</b>：只有所有输入都有信号时，输出才有信号。任一输入无信号时，输出无信号。<br><br>在红石中，与门可以用<b>比较器减法模式 + 火把反相</b>实现：<br>1. 信号A接比较器<b>主输入</b>(背面)<br>2. 信号B经<b>红石火把反相</b>后接比较器<b>侧输入</b><br>3. 输出 = A - (NOT B)<br><br>当B有信号时，NOT B = 0，输出 = A (有信号)<br>当B无信号时，NOT B = 15，输出 = A - 15 = 0 (无信号)<br>所以只有A和B同时有信号时才有输出！', tip: '关键元件：比较器(减法模式) + 红石火把。A接背面，B经火把反相后接侧面' },
+};
+
+function showLogicIntro(logicType) {
+  let info = LOGIC_INTROS[logicType];
+  if (!info) return;
+  document.getElementById('introTitle').textContent = info.title;
+  document.getElementById('introDesc').innerHTML = info.desc;
+  document.getElementById('introTip').textContent = info.tip;
+  document.getElementById('introSubtitle').textContent = '逻辑门新概念';
+  let cv = document.getElementById('introIcon');
+  let ictx = cv.getContext('2d');
+  ictx.clearRect(0, 0, 48, 48);
+  ictx.strokeStyle = '#e94560'; ictx.lineWidth = 2; ictx.fillStyle = 'rgba(233,69,96,0.1)';
+  if (logicType === 'not') { ictx.beginPath(); ictx.moveTo(8,12); ictx.lineTo(8,36); ictx.lineTo(32,24); ictx.closePath(); ictx.fill(); ictx.stroke(); ictx.beginPath(); ictx.arc(38,24,4,0,Math.PI*2); ictx.stroke(); }
+  else if (logicType === 'or') { ictx.beginPath(); ictx.moveTo(8,10); ictx.quadraticCurveTo(20,24,8,38); ictx.quadraticCurveTo(24,38,38,24); ictx.quadraticCurveTo(24,10,8,10); ictx.fill(); ictx.stroke(); }
+  else if (logicType === 'and') { ictx.beginPath(); ictx.moveTo(8,10); ictx.lineTo(24,10); ictx.quadraticCurveTo(40,10,40,24); ictx.quadraticCurveTo(40,38,24,38); ictx.lineTo(8,38); ictx.closePath(); ictx.fill(); ictx.stroke(); }
+  introQueue = [];
+  document.getElementById('introModal').classList.add('show');
+  introSeen.add('logic_' + logicType);
+  localStorage.setItem('rs_intro_seen', JSON.stringify([...introSeen]));
+}
+
+function buildLevelSelector() {
+  let el = document.getElementById('levelSelector'); el.innerHTML = '';
+  for (let i = 0; i < LEVELS.length; i++) {
+    let btn = document.createElement('button');
+    btn.className = 'level-btn'; btn.textContent = i + 1;
+    if (i === G.levelIdx) btn.classList.add('current');
+    if (G.completed.has(i)) btn.classList.add('completed');
+    if (i > 0 && !G.completed.has(i - 1) && !G.completed.has(i)) btn.classList.add('locked');
+    btn.onclick = () => loadLevel(i);
+    el.appendChild(btn);
+  }
+}
+
+function buildComponentBar() {
+  let bar = document.getElementById('componentBar');
+  bar.querySelectorAll('.comp-btn').forEach(b => b.remove());
+  for (let comp of G.level.components) {
+    let btn = document.createElement('div'); btn.className = 'comp-btn'; btn.dataset.comp = comp;
+    let cv = document.createElement('canvas'); cv.width = 36; cv.height = 36;
+    drawComponentIcon(cv.getContext('2d'), comp, 0, 36);
+    btn.appendChild(cv);
+    let name = document.createElement('div'); name.className = 'name'; name.textContent = COMP_NAMES[comp] || comp;
+    btn.appendChild(name);
+    if (G.level.limits && G.level.limits[comp]) {
+      let count = document.createElement('div'); count.className = 'count'; count.id = 'count-' + comp; count.textContent = G.level.limits[comp];
+      btn.appendChild(count);
+    }
+    btn.onclick = () => {
+      G.selectedComp = comp;
+      if (G.level.limits && G.level.limits[comp]) { let used = G.compCounts[comp] || 0; if (used >= G.level.limits[comp]) { showTip(COMP_NAMES[comp] + '已达上限 ' + G.level.limits[comp]); return; } }
+      document.querySelectorAll('.comp-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    bar.appendChild(btn);
+  }
+  let eraseBtn = document.createElement('div'); eraseBtn.className = 'comp-btn'; eraseBtn.dataset.comp = 'erase';
+  let ecv = document.createElement('canvas'); ecv.width = 36; ecv.height = 36;
+  let ectx = ecv.getContext('2d'); ectx.strokeStyle = '#e94560'; ectx.lineWidth = 3;
+  ectx.beginPath(); ectx.moveTo(8,8); ectx.lineTo(28,28); ectx.moveTo(28,8); ectx.lineTo(8,28); ectx.stroke();
+  eraseBtn.appendChild(ecv);
+  let ename = document.createElement('div'); ename.className = 'name'; ename.textContent = '橡皮擦';
+  eraseBtn.appendChild(ename);
+  eraseBtn.onclick = () => { G.selectedComp = 'erase'; document.querySelectorAll('.comp-btn').forEach(b => b.classList.remove('selected')); eraseBtn.classList.add('selected'); };
+  bar.appendChild(eraseBtn);
+}
+
+function updateInfoBar() {
+  let lv = G.level;
+  document.getElementById('levelDesc').textContent = '关卡' + (G.levelIdx+1) + ': ' + lv.name + ' — ' + lv.desc;
+  document.getElementById('targetDelay').textContent = lv.target.delay + ' tick';
+  document.getElementById('targetDuration').textContent = lv.target.duration + ' tick';
+  let cdEl = document.getElementById('currentDelay'); let cuEl = document.getElementById('currentDuration');
+  cdEl.textContent = G.outputDelay >= 0 ? G.outputDelay + ' tick' : '-';
+  cuEl.textContent = G.outputDuration > 0 ? G.outputDuration + ' tick' : (G.outputPowered ? '...' : '-');
+  cdEl.className = (G.outputDelay === lv.target.delay) ? 'matched' : 'current';
+  cuEl.className = (G.outputDuration === lv.target.duration) ? 'matched' : 'current';
+  document.getElementById('tickDisplay').textContent = G.tick;
+  if (G.level.limits) { for (let comp in G.level.limits) { let el = document.getElementById('count-' + comp); if (el) { let used = G.compCounts[comp] || 0; el.textContent = G.level.limits[comp] - used; el.style.color = used >= G.level.limits[comp] ? '#e94560' : '#4ecca3'; } } }
+}
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function resizeCanvas() { canvas.width = G.cols * CELL; canvas.height = G.rows * CELL; }
+function render() {
+  let w = canvas.width, h = canvas.height;
+  ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = '#1a2333'; ctx.lineWidth = 1;
+  for (let x = 0; x <= G.cols; x++) { ctx.beginPath(); ctx.moveTo(x*CELL,0); ctx.lineTo(x*CELL,h); ctx.stroke(); }
+  for (let y = 0; y <= G.rows; y++) { ctx.beginPath(); ctx.moveTo(0,y*CELL); ctx.lineTo(w,y*CELL); ctx.stroke(); }
+  if (G.hoverX >= 0 && G.hoverY >= 0) { ctx.fillStyle = 'rgba(233,69,96,0.12)'; ctx.fillRect(G.hoverX*CELL, G.hoverY*CELL, CELL, CELL); }
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { drawCell(G.grid[x][y], x, y, G.signals[x][y] || 0); }
+  if (G.hoverX >= 0 && G.hoverY >= 0 && G.selectedComp && G.selectedComp !== 'erase') {
+    let cell = G.grid[G.hoverX][G.hoverY];
+    if (cell.type === T.EMPTY) { ctx.globalAlpha = 0.4; drawCell({type:G.selectedComp,direction:G.selectedRotate,delay:1,mode:'compare',outputActive:false,extinguished:false,pulsing:false}, G.hoverX, G.hoverY, 0); ctx.globalAlpha = 1; }
+  }
+  if (G.running) {
+    for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+      let sig = G.signals[x][y] || 0;
+      if (sig > 0 && G.grid[x][y].type === T.DUST) {
+        let phase = (G.animFrame * 0.15 + x * 0.3 + y * 0.2) % 1;
+        let alpha = (1 - phase) * 0.6 * (sig / 15);
+        ctx.fillStyle = 'rgba(255,100,100,' + alpha + ')';
+        let r = 4 + phase * 8;
+        ctx.beginPath(); ctx.arc(x*CELL+CELL/2, y*CELL+CELL/2, r, 0, Math.PI*2); ctx.fill();
+      }
+    }
+  }
+}
+
+function drawCell(cell, x, y, signal) {
+  let px = x * CELL, py = y * CELL, cx = px + CELL/2, cy = py + CELL/2;
+  switch (cell.type) {
+    case T.EMPTY: break;
+    case T.INPUT: {
+      let isActive = G.inputActive, label = 'IN';
+      if (G.inputStates.length > 0) { for (let i = 0; i < G.inputStates.length; i++) { if (G.inputStates[i].x === x && G.inputStates[i].y === y) { isActive = G.inputStates[i].active; label = i === 0 ? 'A' : 'B'; break; } } }
+      ctx.fillStyle = isActive ? '#4ecca3' : '#2a5a4a';
+      ctx.beginPath(); ctx.arc(cx, cy, CELL*0.32, 0, Math.PI*2); ctx.fill();
+      if (isActive) { let g = ctx.createRadialGradient(cx,cy,0,cx,cy,CELL*0.5); g.addColorStop(0,'rgba(78,204,163,0.4)'); g.addColorStop(1,'rgba(78,204,163,0)'); ctx.fillStyle = g; ctx.fillRect(px,py,CELL,CELL); }
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(label, cx, cy);
+      break;
+    }
+    case T.OUTPUT:
+      ctx.fillStyle = G.outputPowered ? '#3498db' : '#1a4a6a';
+      ctx.beginPath(); ctx.arc(cx, cy, CELL*0.32, 0, Math.PI*2); ctx.fill();
+      if (G.outputPowered) { let g = ctx.createRadialGradient(cx,cy,0,cx,cy,CELL*0.5); g.addColorStop(0,'rgba(52,152,219,0.4)'); g.addColorStop(1,'rgba(52,152,219,0)'); ctx.fillStyle = g; ctx.fillRect(px,py,CELL,CELL); }
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('OUT', cx, cy);
+      break;
+    case T.DUST: drawDust(px, py, x, y, signal); break;
+    case T.BLOCK: drawBlock(px, py); break;
+    case T.TORCH: drawTorch(px, py, cell); break;
+    case T.REPEATER: drawRepeater(px, py, cell); break;
+    case T.COMPARATOR: drawComparator(px, py, cell); break;
+    case T.OBSERVER: drawObserver(px, py, cell); break;
+  }
+}
+
+function drawDust(px, py, x, y, signal) {
+  let cx = px + CELL/2, cy = py + CELL/2;
+  let baseColor = signal > 0 ? '#ff3b3b' : '#8b2020';
+  let glowColor = signal > 0 ? '#ff6b6b' : '#5b1010';
+  // 检查四个方向是否有可连接的邻居
+  let conns = [false, false, false, false];
+  let hasConn = false;
+  for (let i = 0; i < 4; i++) {
+    let d = DIRECTIONS[i];
+    let nx = x + d.dx, ny = y + d.dy;
+    if (nx < 0 || nx >= G.cols || ny < 0 || ny >= G.rows) continue;
+    let n = G.grid[nx][ny];
+    if (n.type === T.OUTPUT || isConductive(n)) {
+      if (isDirectionalSource(n)) {
+        let o = getOutputDir(n);
+        if (nx + o.dx === x && ny + o.dy === y) { conns[i] = true; hasConn = true; }
+      } else { conns[i] = true; hasConn = true; }
+    }
+  }
+  // 无连接时画小圆点
+  if (!hasConn) {
+    ctx.fillStyle = glowColor; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2); ctx.fill();
+  } else {
+    ctx.strokeStyle = baseColor; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    for (let i = 0; i < 4; i++) {
+      if (!conns[i]) continue;
+      let d = DIRECTIONS[i];
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      if (d.dx > 0) ctx.lineTo(px + CELL, cy);
+      else if (d.dx < 0) ctx.lineTo(px, cy);
+      else if (d.dy > 0) ctx.lineTo(cx, py + CELL);
+      else ctx.lineTo(cx, py);
+      ctx.stroke();
+    }
+    ctx.fillStyle = glowColor; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2); ctx.fill();
+  }
+  if (signal > 0) {
+    ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 2;
+    if (hasConn) {
+      for (let i = 0; i < 4; i++) {
+        if (!conns[i]) continue;
+        let d = DIRECTIONS[i];
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        if (d.dx > 0) ctx.lineTo(px + CELL, cy);
+        else if (d.dx < 0) ctx.lineTo(px, cy);
+        else if (d.dy > 0) ctx.lineTo(cx, py + CELL);
+        else ctx.lineTo(cx, py);
+        ctx.stroke();
+      }
+    }
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(px+1, py+1, 14, 12);
+    ctx.fillStyle = signal > 1 ? '#ffdd44' : '#ff6666';
+    ctx.font = 'bold 10px monospace'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(signal, px+3, py+2);
+  }
+}
+function drawBlock(px, py) {
+  ctx.fillStyle = '#8b0000'; ctx.fillRect(px+4, py+4, CELL-8, CELL-8);
+  ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2; ctx.strokeRect(px+4, py+4, CELL-8, CELL-8);
+  ctx.fillStyle = '#aa1010'; ctx.fillRect(px+8, py+8, CELL-16, CELL-16);
+  ctx.strokeStyle = '#660000'; ctx.lineWidth = 1; ctx.strokeRect(px+8, py+8, CELL-16, CELL-16);
+}
+function drawTorch(px, py, cell) {
+  let cx = px+CELL/2, cy = py+CELL/2, dir = DIRECTIONS[cell.direction];
+  ctx.strokeStyle = '#666'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx-dir.dx*8, cy-dir.dy*8); ctx.stroke();
+  let tc = cell.extinguished ? '#444' : '#ff3333';
+  let gc = cell.extinguished ? '#222' : '#ff6666';
+  ctx.fillStyle = tc; ctx.beginPath(); ctx.arc(cx+dir.dx*6, cy+dir.dy*6, 6, 0, Math.PI*2); ctx.fill();
+  if (!cell.extinguished) { ctx.shadowColor='#ff3333'; ctx.shadowBlur=10; ctx.fillStyle=gc; ctx.beginPath(); ctx.arc(cx+dir.dx*6, cy+dir.dy*6, 4, 0, Math.PI*2); ctx.fill(); ctx.shadowBlur=0; }
+}
+function drawRepeater(px, py, cell) {
+  let cx=px+CELL/2, cy=py+CELL/2, dir=DIRECTIONS[cell.direction];
+  ctx.fillStyle='#3a3a3a'; ctx.fillRect(px+4,py+4,CELL-8,CELL-8);
+  ctx.strokeStyle='#555'; ctx.lineWidth=1; ctx.strokeRect(px+4,py+4,CELL-8,CELL-8);
+  let ax=cx+dir.dx*12, ay=cy+dir.dy*12, bx=cx-dir.dx*8, by=cy-dir.dy*8;
+  ctx.strokeStyle=cell.outputActive?'#ff3b3b':'#884444'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(ax,ay); ctx.stroke();
+  let perp={dx:-dir.dy,dy:dir.dx};
+  ctx.beginPath(); ctx.moveTo(ax,ay); ctx.lineTo(ax-dir.dx*6+perp.dx*4, ay-dir.dy*6+perp.dy*4); ctx.moveTo(ax,ay); ctx.lineTo(ax-dir.dx*6-perp.dx*4, ay-dir.dy*6-perp.dy*4); ctx.stroke();
+  ctx.fillStyle=cell.outputActive?'#ff6b6b':'#aa4444';
+  for(let i=0;i<cell.delay;i++){let offX=-dir.dy*(10+i*5),offY=dir.dx*(10+i*5);let bX=cx+dir.dx*4+offX,bY=cy+dir.dy*4+offY;ctx.beginPath();ctx.moveTo(bX,bY);ctx.lineTo(bX-3,bY+4);ctx.lineTo(bX+3,bY+4);ctx.closePath();ctx.fill();}
+  if(cell.outputActive){ctx.shadowColor='#ff3b3b';ctx.shadowBlur=8;ctx.strokeStyle='#ff3b3b';ctx.lineWidth=2;ctx.strokeRect(px+4,py+4,CELL-8,CELL-8);ctx.shadowBlur=0;}
+}
+function drawComparator(px, py, cell) {
+  let cx=px+CELL/2, cy=py+CELL/2, dir=DIRECTIONS[cell.direction];
+  ctx.fillStyle='#3a3a3a'; ctx.fillRect(px+4,py+4,CELL-8,CELL-8);
+  ctx.strokeStyle='#555'; ctx.lineWidth=1; ctx.strokeRect(px+4,py+4,CELL-8,CELL-8);
+  let ftX=cx+dir.dx*10, ftY=cy+dir.dy*10;
+  ctx.fillStyle=cell.mode==='compare'?'#ff3b3b':'#444'; if(cell.mode==='subtract')ctx.fillStyle='#444';
+  ctx.beginPath(); ctx.arc(ftX,ftY,4,0,Math.PI*2); ctx.fill();
+  let perp={dx:-dir.dy,dy:dir.dx};
+  for(let s of[-1,1]){let tx=cx-dir.dx*10+perp.dx*s*6,ty=cy-dir.dy*10+perp.dy*s*6;ctx.fillStyle='#aa3333';ctx.beginPath();ctx.arc(tx,ty,3,0,Math.PI*2);ctx.fill();}
+  ctx.strokeStyle=cell.outputActive?'#ff3b3b':'#884444'; ctx.lineWidth=2;
+  ctx.beginPath(); let tipX=cx+dir.dx*14,tipY=cy+dir.dy*14; let baseX=cx-dir.dx*4,baseY=cy-dir.dy*4;
+  ctx.moveTo(baseX+perp.dx*6,baseY+perp.dy*6); ctx.lineTo(tipX,tipY); ctx.lineTo(baseX-perp.dx*6,baseY-perp.dy*6); ctx.stroke();
+  if(cell.outputActive){ctx.shadowColor='#ff3b3b';ctx.shadowBlur=8;ctx.strokeStyle='#ff3b3b';ctx.lineWidth=2;ctx.strokeRect(px+4,py+4,CELL-8,CELL-8);ctx.shadowBlur=0;}
+}
+function drawObserver(px, py, cell) {
+  let cx=px+CELL/2, cy=py+CELL/2, dir=DIRECTIONS[cell.direction];
+  ctx.fillStyle='#2a2a3a'; ctx.fillRect(px+4,py+4,CELL-8,CELL-8);
+  ctx.strokeStyle='#555'; ctx.lineWidth=1; ctx.strokeRect(px+4,py+4,CELL-8,CELL-8);
+  let faceX=cx+dir.dx*10, faceY=cy+dir.dy*10;
+  ctx.fillStyle='#555'; ctx.fillRect(faceX-5,faceY-5,10,10);
+  ctx.fillStyle=cell.pulsing?'#ff3b3b':'#999';
+  let perp={dx:-dir.dy,dy:dir.dx};
+  ctx.beginPath(); ctx.arc(faceX+perp.dx*2,faceY+perp.dy*2,1.5,0,Math.PI*2); ctx.arc(faceX-perp.dx*2,faceY-perp.dy*2,1.5,0,Math.PI*2); ctx.fill();
+  if(cell.pulsing){ctx.shadowColor='#ff3b3b';ctx.shadowBlur=8;let oX=cx-dir.dx*14,oY=cy-dir.dy*14;ctx.fillStyle='#ff3b3b';ctx.beginPath();ctx.arc(oX,oY,4,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
+}
+
+function drawComponentIcon(ctx, type, direction, size) {
+  ctx.clearRect(0, 0, size, size);
+  let cx=size/2, cy=size/2;
+  switch (type) {
+    case 'dust':
+      ctx.strokeStyle='#8b2020'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(4,cy); ctx.lineTo(size-4,cy); ctx.moveTo(cx,4); ctx.lineTo(cx,size-4); ctx.stroke();
+      ctx.fillStyle='#5b1010'; ctx.beginPath(); ctx.arc(cx,cy,3,0,Math.PI*2); ctx.fill(); break;
+    case 'block':
+      ctx.fillStyle='#8b0000'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.strokeStyle='#ff4444'; ctx.lineWidth=2; ctx.strokeRect(4,4,size-8,size-8);
+      ctx.fillStyle='#aa1010'; ctx.fillRect(8,8,size-16,size-16); break;
+    case 'torch':
+      ctx.strokeStyle='#666'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx,cy+6); ctx.stroke();
+      ctx.fillStyle='#ff3333'; ctx.beginPath(); ctx.arc(cx,cy-4,4,0,Math.PI*2); ctx.fill(); break;
+    case 'repeater':
+      ctx.fillStyle='#3a3a3a'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.strokeStyle='#884444'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(8,cy); ctx.lineTo(size-8,cy); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(size-8,cy); ctx.lineTo(size-12,cy-3); ctx.moveTo(size-8,cy); ctx.lineTo(size-12,cy+3); ctx.stroke(); break;
+    case 'comparator':
+      ctx.fillStyle='#3a3a3a'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.fillStyle='#ff3b3b'; ctx.beginPath(); ctx.arc(size-10,cy,3,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#884444'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(8,cy-5); ctx.lineTo(size-10,cy); ctx.lineTo(8,cy+5); ctx.stroke(); break;
+    case 'observer':
+      ctx.fillStyle='#2a2a3a'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.fillStyle='#555'; ctx.fillRect(size-12,cy-4,8,8);
+      ctx.fillStyle='#999'; ctx.beginPath(); ctx.arc(size-9,cy-1,1,0,Math.PI*2); ctx.arc(size-9,cy+1,1,0,Math.PI*2); ctx.fill(); break;
+  }
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  let rect = canvas.getBoundingClientRect();
+  let mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  let my = (e.clientY - rect.top) * (canvas.height / rect.height);
+  G.hoverX = Math.floor(mx / CELL); G.hoverY = Math.floor(my / CELL);
+  if (G.hoverX >= G.cols) G.hoverX = -1; if (G.hoverY >= G.rows) G.hoverY = -1;
+  render();
+});
+canvas.addEventListener('mouseleave', () => { G.hoverX = -1; G.hoverY = -1; render(); });
+canvas.addEventListener('click', (e) => {
+  let rect = canvas.getBoundingClientRect();
+  let mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  let my = (e.clientY - rect.top) * (canvas.height / rect.height);
+  let gx = Math.floor(mx / CELL), gy = Math.floor(my / CELL);
+  if (gx < 0 || gx >= G.cols || gy < 0 || gy >= G.rows) return;
+  let cell = G.grid[gx][gy];
+  if (G.selectedComp && G.selectedComp !== 'erase') {
+    if (cell.type !== T.EMPTY) {
+      if (cell.type === G.selectedComp) {
+        if (cell.type === T.REPEATER) cell.delay = (cell.delay % 4) + 1;
+        else if (cell.type === T.COMPARATOR) cell.mode = cell.mode === 'compare' ? 'subtract' : 'compare';
+        else cell.direction = (cell.direction + 1) % 4;
+        render();
+      }
+      return;
+    }
+    if (G.level.limits && G.level.limits[G.selectedComp]) { let used = G.compCounts[G.selectedComp] || 0; if (used >= G.level.limits[G.selectedComp]) { showTip(COMP_NAMES[G.selectedComp] + '已达上限'); return; } }
+    cell.type = G.selectedComp; cell.direction = G.selectedRotate; cell.delay = 1; cell.mode = 'compare';
+    cell.outputActive=false; cell.prevInput=false; cell.eventQueue=[]; cell.extinguished=false; cell.pulsing=false; cell.pulseTimer=0; cell.prevFrontSignal=0; cell.outputStrength=0; cell.cooldown=0;
+    G.compCounts[G.selectedComp] = (G.compCounts[G.selectedComp] || 0) + 1;
+    resetSimulation(); updateInfoBar(); render();
+  } else if (G.selectedComp === 'erase') {
+    if (cell.type === T.EMPTY || cell.type === T.INPUT || cell.type === T.OUTPUT) return;
+    G.compCounts[cell.type] = Math.max(0, (G.compCounts[cell.type] || 1) - 1);
+    cell.type = T.EMPTY; cell.direction = 0; cell.delay = 1;
+    resetSimulation(); updateInfoBar(); render();
+  }
+});
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  let rect = canvas.getBoundingClientRect();
+  let mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+  let my = (e.clientY - rect.top) * (canvas.height / rect.height);
+  let gx = Math.floor(mx / CELL), gy = Math.floor(my / CELL);
+  if (gx < 0 || gx >= G.cols || gy < 0 || gy >= G.rows) return;
+  let cell = G.grid[gx][gy];
+  if (cell.type === T.EMPTY || cell.type === T.INPUT || cell.type === T.OUTPUT) return;
+  G.compCounts[cell.type] = Math.max(0, (G.compCounts[cell.type] || 1) - 1);
+  cell.type = T.EMPTY; cell.direction = 0;
+  resetSimulation(); updateInfoBar(); render();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'r' || e.key === 'R') { G.selectedRotate = (G.selectedRotate + 1) % 4; showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); }
+  if (e.key === ' ') { e.preventDefault(); if (G.running) pauseSimulation(); else startSimulation(); }
+});
+
+document.getElementById('playBtn').onclick = () => { if (G.running) pauseSimulation(); else startSimulation(); };
+document.getElementById('resetBtn').onclick = () => resetSimulation();
+document.getElementById('stepBtn').onclick = () => stepSimulation();
+document.getElementById('rotateBtn').onclick = () => { G.selectedRotate = (G.selectedRotate + 1) % 4; showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); };
+document.getElementById('nextBtn').onclick = () => { document.getElementById('winModal').classList.remove('show'); if (G.levelIdx + 1 < LEVELS.length) loadLevel(G.levelIdx + 1); else showTip('恭喜！已通关全部关卡！'); };
+document.getElementById('retryBtn').onclick = () => { document.getElementById('winModal').classList.remove('show'); loadLevel(G.levelIdx); };
+
+function showWinModal() {
+  let modal = document.getElementById('winModal');
+  let stars = 3, totalUsed = 0;
+  for (let k in G.compCounts) totalUsed += G.compCounts[k];
+  let par = G.level.par || 10;
+  if (totalUsed > par) stars = 2;
+  if (totalUsed > par * 1.5) stars = 1;
+  document.getElementById('winStars').textContent = '\u2605 '.repeat(stars).trim() + ' \u2606'.repeat(3 - stars);
+  document.getElementById('winInfo').innerHTML = '<b style="font-size:22px;color:#4ecca3">' + G.level.name + '</b><br><br>延迟: ' + G.outputDelay + ' tick (目标 ' + G.level.target.delay + ')<br>持续: ' + G.outputDuration + ' tick (目标 ' + G.level.target.duration + ')<br>使用元件: ' + totalUsed + ' / 推荐 ' + par;
+  modal.classList.add('show');
+}
+
+let tipTimer = null;
+function showTip(msg) {
+  let tip = document.getElementById('tip');
+  tip.textContent = msg; tip.classList.add('show');
+  if (tipTimer) clearTimeout(tipTimer);
+  tipTimer = setTimeout(() => tip.classList.remove('show'), 2000);
+}
+
+function saveToFile() {
+  if (G.level !== null) captureLayout();
+  let data = { version: 2, timestamp: new Date().toISOString(), levelIdx: G.levelIdx, completed: [...G.completed], introSeen: [...introSeen], levelLayouts: G.levelLayouts };
+  let blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a'); a.href = url;
+  let now = new Date();
+  let stamp = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '_' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+  a.download = '红石存档_' + stamp + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showTip('存档已保存！');
+}
+function loadFromFile(file) {
+  let reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      let data = JSON.parse(e.target.result);
+      if (!data || typeof data !== 'object') throw new Error('无效的存档格式');
+      G.completed = new Set(data.completed || []);
+      localStorage.setItem('rs_completed', JSON.stringify([...G.completed]));
+      introSeen = new Set(data.introSeen || []);
+      localStorage.setItem('rs_intro_seen', JSON.stringify([...introSeen]));
+      G.levelLayouts = data.levelLayouts || {};
+      let targetIdx = data.levelIdx || 0;
+      if (targetIdx >= LEVELS.length) targetIdx = 0;
+      G.levelIdx = targetIdx; G.level = LEVELS[targetIdx]; G.selectedComp = null;
+      initGrid(G.level); restoreLayout(targetIdx);
+      buildComponentBar(); buildLevelSelector(); updateInfoBar();
+      document.getElementById('hint').textContent = '提示: ' + (G.level.hint || '');
+      pauseSimulation(); resizeCanvas(); render();
+      showTip('存档已读取！');
+    } catch (err) { showTip('读取失败：' + err.message); }
+  };
+  reader.readAsText(file);
+}
+document.getElementById('saveBtn').onclick = () => saveToFile();
+document.getElementById('loadBtn').onclick = () => { document.getElementById('fileInput').click(); };
+document.getElementById('fileInput').onchange = (e) => { if (e.target.files.length > 0) { loadFromFile(e.target.files[0]); e.target.value = ''; } };
+
+function init() { loadLevel(0); }
+init();
+</script>
+</body>
+</html>
+'''
+
+
+def level_to_js(level):
+    """将一个关卡字典转换为 JS 对象字面量字符串"""
+    lines = []
+    lines.append("  {")
+    lines.append(f"    name: {json.dumps(level.get('name', ''), ensure_ascii=False)},")
+    lines.append(f"    desc: {json.dumps(level.get('desc', ''), ensure_ascii=False)},")
+    lines.append(f"    cols: {level['cols']}, rows: {level['rows']},")
+
+    if 'inputs' in level:
+        inputs_js = json.dumps(level['inputs'], ensure_ascii=False)
+        lines.append(f"    inputs: {inputs_js},")
+    else:
+        input_js = json.dumps(level['input'], ensure_ascii=False)
+        lines.append(f"    input: {input_js},")
+
+    output_js = json.dumps(level['output'], ensure_ascii=False)
+    lines.append(f"    output: {output_js},")
+
+    target_js = json.dumps(level['target'], ensure_ascii=False)
+    lines.append(f"    target: {target_js},")
+
+    components_js = json.dumps(level['components'], ensure_ascii=False)
+    lines.append(f"    components: {components_js},")
+
+    limits = level.get('limits', {})
+    if limits:
+        limits_js = json.dumps(limits, ensure_ascii=False)
+        lines.append(f"    limits: {limits_js},")
+    else:
+        lines.append("    limits: {},")
+
+    lines.append(f"    hint: {json.dumps(level.get('hint', ''), ensure_ascii=False)},")
+    lines.append(f"    par: {level.get('par', 10)},")
+
+    if 'logic' in level:
+        lines.append(f"    logic: {json.dumps(level['logic'], ensure_ascii=False)},")
+
+    if 'preplaced' in level:
+        preplaced_js = json.dumps(level['preplaced'], ensure_ascii=False)
+        lines.append(f"    preplaced: {preplaced_js},")
+
+    # 去掉最后一行末尾的逗号
+    last = lines[-1].rstrip(',')
+    lines[-1] = last
+    lines.append("  }")
+    return '\n'.join(lines)
+
+
+def generate_html(levels_data):
+    """从关卡数据生成完整 HTML"""
+    levels_js = ',\n'.join(level_to_js(lv) for lv in levels_data['levels'])
+    levels_js = '[\n' + levels_js + '\n]'
+    html = HTML_TEMPLATE.replace('__LEVELS_PLACEHOLDER__', levels_js)
+    return html
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("用法: python gen_redstone_game.py <关卡定义文件.json> [输出文件.html]")
+        print("示例: python gen_redstone_game.py levels.json redstone-puzzle.html")
+        sys.exit(1)
+
+    input_file = sys.argv[1]
+    output_file = sys.argv[2] if len(sys.argv) > 2 else 'redstone-puzzle.html'
+
+    if not os.path.exists(input_file):
+        print(f"错误: 文件 '{input_file}' 不存在")
+        sys.exit(1)
+
+    with open(input_file, 'r', encoding='utf-8') as f:
+        try:
+            data = json.load(f)
+        except json.JSONDecodeError as e:
+            print(f"错误: JSON 解析失败 - {e}")
+            sys.exit(1)
+
+    if 'levels' not in data or not isinstance(data['levels'], list):
+        print("错误: 关卡文件必须包含 'levels' 数组")
+        sys.exit(1)
+
+    # 校验关卡数据
+    for i, lv in enumerate(data['levels']):
+        if 'name' not in lv:
+            print(f"警告: 第{i+1}关缺少 name 字段")
+        if 'cols' not in lv or 'rows' not in lv:
+            print(f"错误: 第{i+1}关缺少 cols/rows 字段")
+            sys.exit(1)
+        if 'input' not in lv and 'inputs' not in lv:
+            print(f"错误: 第{i+1}关缺少 input 或 inputs 字段")
+            sys.exit(1)
+        if 'output' not in lv:
+            print(f"错误: 第{i+1}关缺少 output 字段")
+            sys.exit(1)
+        if 'target' not in lv:
+            print(f"错误: 第{i+1}关缺少 target 字段")
+            sys.exit(1)
+        if 'components' not in lv:
+            print(f"错误: 第{i+1}关缺少 components 字段")
+            sys.exit(1)
+
+    html = generate_html(data)
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    print(f"生成成功! {len(data['levels'])} 关 -> {output_file}")
+
+
+if __name__ == '__main__':
+    main()
