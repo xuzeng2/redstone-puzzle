@@ -336,9 +336,88 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
     background:#0f3460; color:#4ecca3; border:1px solid #4ecca3;
   }
   #mpIndicator.show { display:inline-block; }
+  /* 联机聊天区 */
+  #chatPanel {
+    display:none; position:fixed; left:max(0px, calc(50vw - 690px)); top:0;
+    width:240px; height:100vh; background:#0d1117;
+    border-right:2px solid #0f3460; flex-direction:column; z-index:90;
+    transition:left 0.3s ease, top 0.3s ease, height 0.3s ease;
+  }
+  #chatPanel.show { display:flex; }
+  #chatPanel .chat-header {
+    padding:10px 14px; background:#16213e; border-bottom:2px solid #0f3460;
+    font-size:14px; color:#4ecca3; font-weight:bold; display:flex; align-items:center; gap:6px;
+  }
+  #chatPanel .chat-messages {
+    flex:1; overflow-y:auto; padding:8px; display:flex; flex-direction:column; gap:6px;
+  }
+  #chatPanel .chat-messages::-webkit-scrollbar { width:4px; }
+  #chatPanel .chat-messages::-webkit-scrollbar-thumb { background:#0f3460; border-radius:2px; }
+  #chatPanel .chat-msg {
+    max-width:85%; padding:6px 10px; border-radius:8px; font-size:12px;
+    word-break:break-word; line-height:1.5; animation:chatFadeIn .2s;
+  }
+  @keyframes chatFadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+  #chatPanel .chat-msg.self {
+    align-self:flex-end; background:#0f3460; color:#4ecca3; border:1px solid #4ecca3;
+  }
+  #chatPanel .chat-msg.other {
+    align-self:flex-start; background:#1a1a2e; color:#e94560; border:1px solid #e94560;
+  }
+  #chatPanel .chat-msg.system {
+    align-self:center; background:none; color:#555; font-size:11px; border:none;
+  }
+  #chatPanel .chat-input-area {
+    padding:8px; border-top:1px solid #0f3460; display:flex; gap:6px;
+  }
+  #chatPanel .chat-input {
+    flex:1; background:#16213e; border:1px solid #0f3460; border-radius:4px;
+    color:#e0e0e0; padding:6px 8px; font-size:12px; outline:none;
+  }
+  #chatPanel .chat-input:focus { border-color:#4ecca3; }
+  #chatPanel .chat-send-btn {
+    padding:6px 12px; background:#0f3460; border:1px solid #4ecca3;
+    color:#4ecca3; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;
+  }
+  #chatPanel .chat-send-btn:hover { background:#4ecca3; color:#0d1117; }
+  #chatPanel .chat-mic-btn {
+    padding:6px 8px; background:#0f3460; border:1px solid #e94560;
+    color:#e94560; border-radius:4px; cursor:pointer; font-size:14px; line-height:1;
+    transition: all 0.2s;
+  }
+  #chatPanel .chat-mic-btn:hover { background:#e94560; color:#fff; }
+  #chatPanel .chat-mic-btn.recording {
+    background:#e94560; color:#fff; animation:micPulse 1s infinite;
+  }
+  @keyframes micPulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  #chatPanel .chat-msg.voice {
+    display:flex; align-items:center; gap:6px; cursor:pointer;
+  }
+  #chatPanel .chat-msg.voice .voice-icon { font-size:16px; }
+  #chatPanel .chat-msg.voice .voice-duration { font-size:11px; opacity:.8; }
+  #chatPanel .chat-msg.voice.playing .voice-icon { animation:micPulse .6s infinite; }
+  #chatPanel .chat-recording-hint {
+    display:none; padding:4px 8px; background:rgba(233,69,96,.15);
+    color:#e94560; font-size:11px; text-align:center;
+  }
+  #chatPanel .chat-recording-hint.show { display:block; }
+  body.chat-open { padding-left:min(240px, max(0px, calc(1380px - 100vw))); }
+  body { transition: padding-left 0.3s ease; }
 </style>
 </head>
 <body>
+
+<!-- 联机聊天区 -->
+<div id="chatPanel">
+  <div class="chat-header">&#128172; 联机聊天</div>
+  <div class="chat-messages" id="chatMessages"></div>
+  <div class="chat-recording-hint" id="chatRecordingHint">&#128308; 录音中... 点击麦克风停止并发送</div>
+  <div class="chat-input-area">
+    <input type="text" class="chat-input" id="chatInput" placeholder="输入消息..." maxlength="200">
+    <button class="chat-mic-btn" id="chatMicBtn" title="语音消息">&#127908;</button>
+    <button class="chat-send-btn" id="chatSendBtn">发送</button>
+  </div>
+</div>
 
 <div id="homePage" class="hide">
   <div class="home-title">红石逻辑解谜</div>
@@ -675,6 +754,9 @@ function onPeerConnect() {
     setTimeout(() => { syncFullState(); }, 300);
   }
   showTip(MP.myZone === 'left' ? '你是 P1 左区主机' : '你是 P2 右区加入方');
+  // 显示聊天面板
+  showChatPanel();
+  addChatSystem('—— 联机已连接 ——');
 }
 
 // --- 连接错误 ---
@@ -686,8 +768,14 @@ function onPeerError(err) {
 // --- 连接关闭 ---
 function onPeerClose() {
   let wasConnected = MP.connected;
+  // 停止录音
+  if (voiceRecorder && voiceRecorder.state === 'recording') {
+    try { voiceRecorder.stop(); } catch(e){}
+  }
   MP.connected = false;
   MP.peer = null;
+  // 隐藏聊天面板
+  hideChatPanel();
   if (wasConnected) {
     setMPStatus('⚪ 连接已断开', false);
     updateMPIndicator();
@@ -705,9 +793,16 @@ function onPeerClose() {
 
 // --- 断开连接 ---
 function mpDisconnect() {
+  // 停止录音
+  if (voiceRecorder && voiceRecorder.state === 'recording') {
+    try { voiceRecorder.stop(); } catch(e){}
+  }
   if (MP.peer) { try { MP.peer.destroy(); } catch(e){} MP.peer = null; }
   MP.connected = false; MP.enabled = false; MP.myZone = null;
   MP.remoteCursor = { x: -1, y: -1 };
+  // 隐藏聊天面板并清空消息
+  hideChatPanel();
+  document.getElementById('chatMessages').innerHTML = '';
   setMPStatus('⚪ 未连接', false);
   updateMPIndicator();
   document.getElementById('mpDisconnectBtn').style.display = 'none';
@@ -732,6 +827,11 @@ function syncFullState() {
 
 // --- 处理远端数据 ---
 function onPeerData(data) {
+  // 二进制数据 = 语音消息
+  if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
+    playVoiceMessage(data);
+    return;
+  }
   let msg;
   try { msg = JSON.parse(data.toString()); } catch(e) { return; }
   MP.syncing = true;
@@ -810,8 +910,198 @@ function onPeerData(data) {
       break;
     }
     case 'cursor': { MP.remoteCursor = { x: msg.x, y: msg.y }; render(); break; }
+    case 'chat': { addChatMessage(msg.text, 'other'); break; }
   }
   MP.syncing = false;
+}
+
+// --- 聊天功能 ---
+function sendChatMessage() {
+  let input = document.getElementById('chatInput');
+  let text = input.value.trim();
+  if (!text) return;
+  if (!MP.connected) { showTip('未连接到队友'); return; }
+  sendToPeer({ t: 'chat', text: text });
+  addChatMessage(text, 'self');
+  input.value = '';
+}
+
+function addChatMessage(text, who) {
+  let container = document.getElementById('chatMessages');
+  let div = document.createElement('div');
+  div.className = 'chat-msg ' + who;
+  if (who === 'self') {
+    div.textContent = text;
+  } else {
+    div.textContent = '队友: ' + text;
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addChatSystem(text) {
+  let container = document.getElementById('chatMessages');
+  let div = document.createElement('div');
+  div.className = 'chat-msg system';
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function positionChatPanel() {
+  let chatPanel = document.getElementById('chatPanel');
+  let header = document.getElementById('header');
+  let hint = document.getElementById('hint');
+  if (!header || !hint || !chatPanel) return;
+  let top = header.getBoundingClientRect().top;
+  let bottom = hint.getBoundingClientRect().bottom;
+  chatPanel.style.top = top + 'px';
+  chatPanel.style.height = (bottom - top) + 'px';
+}
+
+function showChatPanel() {
+  positionChatPanel();
+  document.getElementById('chatPanel').classList.add('show');
+  document.body.classList.add('chat-open');
+}
+
+function hideChatPanel() {
+  document.getElementById('chatPanel').classList.remove('show');
+  document.body.classList.remove('chat-open');
+  let chatPanel = document.getElementById('chatPanel');
+  chatPanel.style.top = '';
+  chatPanel.style.height = '';
+}
+
+window.addEventListener('resize', () => {
+  let chatPanel = document.getElementById('chatPanel');
+  if (chatPanel && chatPanel.classList.contains('show')) {
+    positionChatPanel();
+  }
+});
+
+// --- 语音消息功能 ---
+let voiceRecorder = null;
+let voiceChunks = [];
+let voiceStartTime = 0;
+let voiceTimer = null;
+
+async function toggleVoiceRecording() {
+  let micBtn = document.getElementById('chatMicBtn');
+  let hint = document.getElementById('chatRecordingHint');
+
+  if (voiceRecorder && voiceRecorder.state === 'recording') {
+    voiceRecorder.stop();
+    return;
+  }
+
+  if (!MP.connected) { showTip('未连接到队友'); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    showTip('浏览器不支持语音功能'); return;
+  }
+
+  try {
+    let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    voiceChunks = [];
+    voiceRecorder = new MediaRecorder(stream);
+    voiceRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) voiceChunks.push(e.data);
+    };
+    voiceRecorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      micBtn.classList.remove('recording');
+      hint.classList.remove('show');
+      clearTimeout(voiceTimer);
+      let duration = Math.round((Date.now() - voiceStartTime) / 1000);
+
+      if (voiceChunks.length === 0) { showTip('录音为空'); return; }
+
+      let blob = new Blob(voiceChunks, { type: 'audio/webm' });
+      blob.arrayBuffer().then(buf => {
+        let header = new ArrayBuffer(8);
+        let dv = new DataView(header);
+        dv.setUint32(0, 0x564F4943);
+        dv.setUint32(4, duration);
+        let combined = new Uint8Array(8 + buf.byteLength);
+        combined.set(new Uint8Array(header), 0);
+        combined.set(new Uint8Array(buf), 8);
+        try {
+          MP.peer.send(combined);
+        } catch(e) {
+          showTip('发送失败: ' + e.message);
+          return;
+        }
+        addVoiceMessage(duration, blob, 'self');
+        playClick();
+      });
+    };
+
+    voiceRecorder.start();
+    voiceStartTime = Date.now();
+    micBtn.classList.add('recording');
+    hint.classList.add('show');
+
+    voiceTimer = setTimeout(() => {
+      if (voiceRecorder && voiceRecorder.state === 'recording') {
+        voiceRecorder.stop();
+      }
+    }, 60000);
+
+  } catch(e) {
+    showTip('无法访问麦克风: ' + (e.message || '权限被拒绝'));
+  }
+}
+
+function playVoiceMessage(data) {
+  let arr = new Uint8Array(data);
+  if (arr.length < 8) return;
+  let dv = new DataView(arr.buffer);
+  let magic = dv.getUint32(0);
+  if (magic !== 0x564F4943) return;
+  let duration = dv.getUint32(4);
+  let audioData = arr.slice(8);
+  let blob = new Blob([audioData], { type: 'audio/webm' });
+  addVoiceMessage(duration, blob, 'other');
+}
+
+function addVoiceMessage(duration, blob, who) {
+  let container = document.getElementById('chatMessages');
+  let div = document.createElement('div');
+  div.className = 'chat-msg voice ' + who;
+
+  let icon = document.createElement('span');
+  icon.className = 'voice-icon';
+  icon.innerHTML = who === 'self' ? '&#128483;' : '&#128253;';
+
+  let dur = document.createElement('span');
+  dur.className = 'voice-duration';
+  dur.textContent = duration + 's';
+
+  div.appendChild(icon);
+  div.appendChild(dur);
+
+  if (who === 'other') {
+    let label = document.createElement('span');
+    label.style.fontSize = '11px';
+    label.style.opacity = '0.7';
+    label.textContent = '队友';
+    div.insertBefore(label, icon);
+  }
+
+  div.onclick = () => {
+    let audio = new Audio(URL.createObjectURL(blob));
+    div.classList.add('playing');
+    audio.onended = () => { div.classList.remove('playing'); };
+    audio.play();
+  };
+
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+
+  if (who === 'other') {
+    let audio = new Audio(URL.createObjectURL(blob));
+    audio.play().catch(() => {});
+  }
 }
 
 // --- 打开/关闭联机弹窗 ---
@@ -854,6 +1144,13 @@ document.getElementById('mpConfirmAnswerBtn').onclick = () => { playClick(); mpC
 document.getElementById('mpDisconnectBtn').onclick = () => { playClick(); mpDisconnect(); };
 document.getElementById('mpCopyOfferBtn').onclick = () => { mpCopyText(document.getElementById('mpOfferCode').value, '邀请码'); };
 document.getElementById('mpCopyAnswerBtn').onclick = () => { mpCopyText(document.getElementById('mpAnswerCode').value, '应答码'); };
+
+// --- 聊天事件绑定 ---
+document.getElementById('chatSendBtn').onclick = () => { playClick(); sendChatMessage(); };
+document.getElementById('chatInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
+});
+document.getElementById('chatMicBtn').onclick = () => { toggleVoiceRecording(); };
 
 // ============================================================
 //  常量定义
