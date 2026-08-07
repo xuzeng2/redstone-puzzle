@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>红石逻辑解谜 · 动态主页</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0d1117;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1.5rem;
+      overflow-x: hidden;
+    }
+
+    /* 动态粒子背景 (红石信号风格) */
+    #particle-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: 0.3;
+    }
+
+    .main-card {
+      position: relative;
+      z-index: 1;
+      max-width: 960px;
+      width: 100%;
+      background: rgba(22, 33, 62, 0.75);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 32px;
+      padding: 2.8rem 3rem;
+      border: 1px solid rgba(78, 204, 163, 0.2);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(233, 69, 96, 0.15);
+      animation: cardFade 1s ease-out;
+    }
+    @keyframes cardFade {
+      0% { opacity: 0; transform: translateY(30px) scale(0.98); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* 标题区域 */
+    .header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.6rem;
+    }
+    .title-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .title-group h1 {
+      font-size: 2.8rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #e94560, #ff6b8a);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 1px;
+    }
+    .title-group .version {
+      background: #0f3460;
+      padding: 0.2rem 1rem;
+      border-radius: 40px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #4ecca3;
+      border: 1px solid #4ecca3;
+      -webkit-text-fill-color: #4ecca3;
+    }
+    .badge-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 0.2rem 0 1.2rem 0;
+    }
+    .badge {
+      background: rgba(15, 52, 96, 0.6);
+      padding: 0.25rem 1rem;
+      border-radius: 40px;
+      font-size: 0.8rem;
+      border: 1px solid #2a4a7a;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: #b8d0e0;
+      backdrop-filter: blur(4px);
+    }
+    .badge.highlight {
+      border-color: #e94560;
+      color: #e94560;
+    }
+    .badge .icon { font-size: 1.1rem; }
+
+    /* 描述 */
+    .desc-text {
+      font-size: 1.05rem;
+      color: #c8d8e8;
+      line-height: 1.8;
+      margin: 1rem 0 1.8rem 0;
+      padding-left: 1.2rem;
+      border-left: 3px solid #e94560;
+    }
+    .desc-text strong { color: #4ecca3; font-weight: 600; }
+
+    /* 元件网格 (动画卡片) */
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #4ecca3;
+      margin: 1.8rem 0 1rem 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, #4ecca3, transparent);
+    }
+    .component-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 14px;
+      margin: 0.8rem 0 0.5rem 0;
+    }
+    .comp-card {
+      background: rgba(13, 23, 33, 0.7);
+      border-radius: 16px;
+      padding: 0.9rem 0.6rem;
+      text-align: center;
+      border: 1px solid #1a2a3a;
+      transition: all 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
+      cursor: default;
+      backdrop-filter: blur(4px);
+      position: relative;
+      overflow: hidden;
+    }
+    .comp-card::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at 30% 30%, rgba(233,69,96,0.05), transparent 70%);
+      opacity: 0;
+      transition: opacity 0.4s;
+    }
+    .comp-card:hover {
+      transform: translateY(-6px) scale(1.02);
+      border-color: #4ecca3;
+      box-shadow: 0 8px 25px rgba(78, 204, 163, 0.15);
+    }
+    .comp-card:hover::after { opacity: 1; }
+    .comp-card .emoji { font-size: 2.4rem; display: block; margin-bottom: 2px; filter: drop-shadow(0 0 6px rgba(233,69,96,0.2)); }
+    .comp-card .name { font-size: 0.85rem; font-weight: 500; color: #d0dcec; }
+    .comp-card .sub { font-size: 0.65rem; color: #6a8aaa; margin-top: 2px; }
+    /* 浮动动画 */
+    .comp-card:nth-child(1) { animation: floatCard 4s ease-in-out infinite; }
+    .comp-card:nth-child(2) { animation: floatCard 4.6s ease-in-out infinite 0.2s; }
+    .comp-card:nth-child(3) { animation: floatCard 5.2s ease-in-out infinite 0.4s; }
+    .comp-card:nth-child(4) { animation: floatCard 4.4s ease-in-out infinite 0.6s; }
+    .comp-card:nth-child(5) { animation: floatCard 5s ease-in-out infinite 0.8s; }
+    .comp-card:nth-child(6) { animation: floatCard 4.8s ease-in-out infinite 1s; }
+    @keyframes floatCard {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-6px); }
+    }
+
+    /* 关卡预览 */
+    .level-preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+      margin: 0.8rem 0 1.2rem 0;
+    }
+    .level-item {
+      background: rgba(13, 23, 33, 0.6);
+      border-radius: 12px;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid #1a2a3a;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: 0.2s;
+    }
+    .level-item:hover {
+      border-color: #4ecca3;
+      background: rgba(13, 23, 33, 0.8);
+    }
+    .level-item .num {
+      background: #0f3460;
+      border-radius: 50%;
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      color: #4ecca3;
+      flex-shrink: 0;
+    }
+    .level-item .info {
+      font-size: 0.75rem;
+      line-height: 1.3;
+    }
+    .level-item .info .name {
+      color: #d0dcec;
+      font-weight: 500;
+    }
+    .level-item .info .tag {
+      color: #6a8aaa;
+      font-size: 0.6rem;
+    }
+
+    /* 操作指南 */
+    .guide-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+      margin: 0.6rem 0 1.2rem 0;
+    }
+    .guide-item {
+      background: rgba(13, 23, 33, 0.5);
+      border-radius: 12px;
+      padding: 0.7rem 1rem;
+      border: 1px solid #1a2a3a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: 0.2s;
+    }
+    .guide-item:hover { border-color: #3a5a7a; }
+    .guide-item .key {
+      background: #0f3460;
+      padding: 0.1rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #c0d0e0;
+      border: 1px solid #2a4a6a;
+      flex-shrink: 0;
+    }
+    .guide-item .action { font-size: 0.8rem; color: #b0c8d8; }
+
+    /* 按钮行 */
+    .btn-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      justify-content: center;
+      margin-top: 1.6rem;
+    }
+    .btn {
+      padding: 0.7rem 2rem;
+      border-radius: 60px;
+      font-weight: 600;
+      font-size: 1rem;
+      background: transparent;
+      border: 2px solid #0f3460;
+      color: #e0e0e0;
+      text-decoration: none;
+      transition: all 0.25s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      backdrop-filter: blur(4px);
+      letter-spacing: 0.3px;
+    }
+    .btn:hover {
+      transform: scale(1.04);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+    .btn-primary {
+      background: #e94560;
+      border-color: #e94560;
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: #ff5570;
+      border-color: #ff5570;
+      box-shadow: 0 0 20px rgba(233,69,96,0.3);
+    }
+    .btn-outline {
+      border-color: #4ecca3;
+      color: #4ecca3;
+    }
+    .btn-outline:hover {
+      background: #4ecca3;
+      color: #0d1117;
+      border-color: #4ecca3;
+    }
+    .btn-ghost {
+      border-color: #3a5a7a;
+      color: #8aacce;
+    }
+    .btn-ghost:hover {
+      border-color: #e94560;
+      color: #e94560;
+    }
+
+    /* 底部 */
+    .footer-info {
+      margin-top: 2rem;
+      padding-top: 1.2rem;
+      border-top: 1px solid rgba(58, 90, 122, 0.3);
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: #5a7a9a;
+    }
+    .footer-info .hint {
+      display: flex;
+      gap: 1.2rem;
+      flex-wrap: wrap;
+    }
+    .footer-info .hint span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .footer-info kbd {
+      background: #0f3460;
+      padding: 0.1rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      color: #c0d0e0;
+      border: 1px solid #2a4a6a;
+    }
+
+    /* 响应式 */
+    @media (max-width: 640px) {
+      .main-card { padding: 1.8rem 1.2rem; }
+      .title-group h1 { font-size: 2rem; }
+      .component-grid { grid-template-columns: repeat(3, 1fr); }
+      .level-preview { grid-template-columns: repeat(2, 1fr); }
+      .guide-grid { grid-template-columns: 1fr; }
+      .footer-info { flex-direction: column; gap: 8px; align-items: flex-start; }
+    }
+    @media (max-width: 440px) {
+      .component-grid { grid-template-columns: repeat(2, 1fr); }
+      .level-preview { grid-template-columns: 1fr; }
+      .btn { padding: 0.5rem 1.2rem; font-size: 0.9rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <canvas id="particle-canvas"></canvas>
+
+  <div class="main-card">
+    <!-- 头部 -->
+    <div class="header">
+      <div class="title-group">
+        <h1>⚡ 红石逻辑解谜</h1>
+        <span class="version">v2.0</span>
+      </div>
+      <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+        <span style="color:#4ecca3; font-size:0.9rem;">🧩 10 关</span>
+        <span style="color:#5a7a9a;">|</span>
+        <span style="color:#e94560; font-size:0.9rem;">🎯 逻辑门</span>
+        <span style="color:#5a7a9a;">|</span>
+        <span style="color:#8aacce; font-size:0.9rem;">⚡ tick 模拟</span>
+      </div>
+    </div>
+
+    <!-- 标签 -->
+    <div class="badge-row">
+      <span class="badge"><span class="icon">🧱</span> 6 种元件</span>
+      <span class="badge"><span class="icon">⏱️</span> tick 级延迟</span>
+      <span class="badge highlight"><span class="icon">🎛️</span> 非 / 或 / 与门</span>
+      <span class="badge"><span class="icon">💾</span> 本地存档</span>
+      <span class="badge"><span class="icon">📦</span> 自定义关卡</span>
+    </div>
+
+    <!-- 描述 -->
+    <div class="desc-text">
+      <strong>🎯 目标</strong> — 在网格上放置红石元件搭建电路，使输出端信号的 
+      <strong>延迟 (delay)</strong> 与 <strong>持续时间 (duration)</strong> 精确匹配关卡目标。
+      每个红石粉产生 <strong>1 tick</strong> 延迟并衰减 1 点强度；中继器可调 1~4 tick 延迟并恢复信号；
+      火把实现 <strong>逻辑非</strong>；比较器支持比较/减法模式；侦测器捕捉上升沿输出短脉冲。
+    </div>
+
+    <!-- 元件一览 -->
+    <div class="section-title">🧰 红石元件</div>
+    <div class="component-grid">
+      <div class="comp-card"><span class="emoji">🟥</span><div class="name">红石粉</div><div class="sub">导线 · 1 tick</div></div>
+      <div class="comp-card"><span class="emoji">🔁</span><div class="name">中继器</div><div class="sub">放大 · 1~4 tick</div></div>
+      <div class="comp-card"><span class="emoji">🔥</span><div class="name">红石火把</div><div class="sub">反相 · 非门</div></div>
+      <div class="comp-card"><span class="emoji">📊</span><div class="name">比较器</div><div class="sub">比较 / 减法</div></div>
+      <div class="comp-card"><span class="emoji">👁️</span><div class="name">侦测器</div><div class="sub">上升沿 · 2 tick</div></div>
+      <div class="comp-card"><span class="emoji">🧱</span><div class="name">红石块</div><div class="sub">永久信号源</div></div>
+    </div>
+
+    <!-- 内置关卡 -->
+    <div class="section-title">📋 内置关卡 (10 关)</div>
+    <div class="level-preview">
+      <div class="level-item"><span class="num">1</span><div class="info"><div class="name">初识红石</div><div class="tag">导线连接</div></div></div>
+      <div class="level-item"><span class="num">2</span><div class="info"><div class="name">蜿蜒之路</div><div class="tag">拐弯布线</div></div></div>
+      <div class="level-item"><span class="num">3</span><div class="info"><div class="name">精确制导</div><div class="tag">精确延迟</div></div></div>
+      <div class="level-item"><span class="num">4</span><div class="info"><div class="name">延迟的艺术</div><div class="tag">中继器调节</div></div></div>
+      <div class="level-item"><span class="num">5</span><div class="info"><div class="name">脉冲转换</div><div class="tag">侦测器</div></div></div>
+      <div class="level-item"><span class="num">6</span><div class="info"><div class="name">极简主义</div><div class="tag">元件限制</div></div></div>
+      <div class="level-item"><span class="num">7</span><div class="info"><div class="name">脉冲延迟</div><div class="tag">延迟+脉冲</div></div></div>
+      <div class="level-item"><span class="num">8</span><div class="info"><div class="name">逻辑非门</div><div class="tag">🔥 火把反相</div></div></div>
+      <div class="level-item"><span class="num">9</span><div class="info"><div class="name">逻辑或门</div><div class="tag">两路汇合</div></div></div>
+      <div class="level-item"><span class="num">10</span><div class="info"><div class="name">逻辑与门</div><div class="tag">比较器+火把</div></div></div>
+    </div>
+
+    <!-- 操作指南 -->
+    <div class="section-title">🎮 操作指南</div>
+    <div class="guide-grid">
+      <div class="guide-item"><span class="key">左键</span><span class="action">放置元件</span></div>
+      <div class="guide-item"><span class="key">右键</span><span class="action">移除元件</span></div>
+      <div class="guide-item"><span class="key">R</span><span class="action">旋转方向</span></div>
+      <div class="guide-item"><span class="key">空格</span><span class="action">播放 / 暂停</span></div>
+      <div class="guide-item"><span class="key">点击元件</span><span class="action">切换延迟/模式</span></div>
+      <div class="guide-item"><span class="key">💾 存档</span><span class="action">导出进度 JSON</span></div>
+    </div>
+
+    <!-- 特色亮点 -->
+    <div style="display: flex; flex-wrap: wrap; gap: 12px 20px; background: rgba(13,23,33,0.4); border-radius: 16px; padding: 1rem 1.2rem; margin: 0.8rem 0 0.2rem 0; border: 1px solid #1a2a3a;">
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #b0c8d8;">✨ <strong style="color:#4ecca3;">评星系统</strong> — 根据元件使用量评 ★★★</span>
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #b0c8d8;">📂 <strong style="color:#4ecca3;">自定义关卡</strong> — 通过 JSON 定义新关卡</span>
+      <span style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #b0c8d8;">🧠 <strong style="color:#4ecca3;">逻辑门教程</strong> — 非/或/与门自动介绍</span>
+    </div>
+
+    <!-- 按钮 -->
+    <div class="btn-row">
+      <a href="index.html" class="btn btn-primary">🎮 打开游戏</a>
+      <a href="gen_redstone_game.py" class="btn btn-outline">🐍 生成器脚本</a>
+      <a href="levels_example.json" class="btn btn-ghost">📦 示例关卡</a>
+      <a href="README.md" class="btn btn-ghost">📖 完整说明</a>
+    </div>
+
+    <!-- 底部 -->
+    <div class="footer-info">
+      <div class="hint">
+        <span>🖱️ 左键放置 · 右键移除</span>
+        <span>🔄 <kbd>R</kbd> 旋转</span>
+        <span>⏯️ <kbd>空格</kbd> 播放/暂停</span>
+        <span>💾 存档 / 读档</span>
+      </div>
+      <span style="color: #4e6a8a;">⚡ 用电路诠释逻辑 · MIT</span>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // 动态粒子背景 — 模拟红石信号流动 (增强版)
+    // ============================================================
+    (function initParticles() {
+      const canvas = document.getElementById('particle-canvas');
+      const ctx = canvas.getContext('2d');
+      let w, h;
+      const particles = [];
+      const PARTICLE_COUNT = 120;
+
+      function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      class Particle {
+        constructor() { this.reset(); }
+        reset() {
+          this.x = Math.random() * w;
+          this.y = Math.random() * h;
+          this.size = 1.8 + Math.random() * 4.5;
+          this.speedX = (Math.random() - 0.5) * 0.5;
+          this.speedY = (Math.random() - 0.5) * 0.5;
+          this.opacity = 0.3 + Math.random() * 0.5;
+          const hue = 340 + Math.random() * 30;
+          this.color = `hsl(${hue}, 80%, ${55 + Math.random() * 30}%)`;
+          this.phase = Math.random() * Math.PI * 2;
+          this.pulseSpeed = 0.008 + Math.random() * 0.025;
+          this.life = 1;
+        }
+        update() {
+          this.x += this.speedX + Math.sin(this.phase) * 0.12;
+          this.y += this.speedY + Math.cos(this.phase * 0.7) * 0.12;
+          this.phase += this.pulseSpeed;
+          this.life = 0.98 + 0.02 * Math.sin(this.phase * 0.5);
+
+          if (this.x < -20 || this.x > w + 20 || this.y < -20 || this.y > h + 20) {
+            this.reset();
+            this.x = Math.random() * w;
+            this.y = Math.random() * h;
+          }
+          if (this.x < 0) this.x = w;
+          if (this.x > w) this.x = 0;
+          if (this.y < 0) this.y = h;
+          if (this.y > h) this.y = 0;
+        }
+        draw() {
+          const pulse = 0.6 + 0.4 * Math.sin(this.phase * 2);
+          const r = this.size * (0.7 + 0.3 * pulse) * this.life;
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, r, 0, Math.PI * 2);
+          ctx.fillStyle = this.color;
+          ctx.globalAlpha = this.opacity * (0.6 + 0.4 * pulse) * this.life;
+          ctx.fill();
+          if (this.size > 2.5) {
+            ctx.shadowColor = this.color;
+            ctx.shadowBlur = 14;
+            ctx.fill();
+            ctx.shadowBlur = 0;
+          }
+        }
+      }
+
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particles.push(new Particle());
+      }
+
+      function drawLines() {
+        for (let i = 0; i < particles.length; i++) {
+          for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[i].x - particles[j].x;
+            const dy = particles[i].y - particles[j].y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 140) {
+              const alpha = (1 - dist / 140) * 0.2 * particles[i].life * particles[j].life;
+              ctx.beginPath();
+              ctx.moveTo(particles[i].x, particles[i].y);
+              ctx.lineTo(particles[j].x, particles[j].y);
+              ctx.strokeStyle = `rgba(233, 69, 96, ${alpha})`;
+              ctx.lineWidth = 0.7;
+              ctx.stroke();
+            }
+          }
+        }
+      }
+
+      function animate() {
+        ctx.clearRect(0, 0, w, h);
+        for (const p of particles) {
+          p.update();
+          p.draw();
+        }
+        drawLines();
+        requestAnimationFrame(animate);
+      }
+
+      animate();
+    })();
+  </script>
+</body>
+</html>
