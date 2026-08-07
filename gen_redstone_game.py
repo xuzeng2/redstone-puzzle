@@ -94,6 +94,7 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
   .level-btn:hover { border-color:#e94560; color:#e94560; }
   .level-btn.current { background:#e94560; color:#fff; border-color:#e94560; }
   .level-btn.completed { background:#0f3460; color:#4ecca3; border-color:#4ecca3; }
+  .level-btn.current.completed { background:#0f3460; color:#4ecca3; border-color:#e94560; box-shadow:0 0 8px rgba(233,69,96,.7); }
   .level-btn.locked { opacity:.3; cursor:not-allowed; }
   #infoBar {
     width:100%; max-width:900px; padding:8px 16px;
@@ -190,12 +191,105 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
   }
   #tip.show { display:block; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+  /* 全通关弹窗 */
+  #finalModal {
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,.85); z-index:120; justify-content:center; align-items:center;
+  }
+  #finalModal.show { display:flex; }
+  #finalModal .panel {
+    background:#16213e; border:5px solid #ffd700; border-radius:16px;
+    padding:60px 80px; text-align:center; max-width:640px;
+    box-shadow:0 0 60px rgba(255,215,0,.5);
+    animation:finalPop .5s ease-out;
+  }
+  @keyframes finalPop {
+    0% { transform:scale(0.3); opacity:0; }
+    60% { transform:scale(1.08); }
+    100% { transform:scale(1); opacity:1; }
+  }
+  #finalModal h2 { color:#ffd700; font-size:56px; margin-bottom:28px; letter-spacing:8px; text-shadow:0 0 20px rgba(255,215,0,.6); }
+  #finalModal p { color:#ccc; margin-bottom:28px; line-height:2; font-size:22px; }
+  #finalModal .stars { font-size:72px; margin-bottom:32px; color:#ffd700; letter-spacing:12px; }
+  #finalModal .btn { margin:0 auto; font-size:18px; padding:12px 32px; }
+  /* 失败弹窗 */
+  #failModal {
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,.7); z-index:100; justify-content:center; align-items:center;
+  }
+  #failModal.show { display:flex; }
+  #failModal .panel {
+    background:#16213e; border:4px solid #e94560; border-radius:12px;
+    padding:40px 50px; text-align:center; max-width:480px;
+    box-shadow:0 0 40px rgba(233,69,96,.4);
+    animation:failPop .4s ease-out;
+  }
+  @keyframes failPop {
+    0% { transform:scale(0.5); opacity:0; }
+    70% { transform:scale(1.05); }
+    100% { transform:scale(1); opacity:1; }
+  }
+  #failModal h2 { color:#e94560; font-size:36px; margin-bottom:20px; letter-spacing:4px; }
+  #failModal p { color:#ccc; margin-bottom:24px; line-height:1.8; font-size:16px; }
+  #failModal .btn { margin:0 6px; font-size:16px; padding:10px 24px; }
+  /* 主页 */
+  #homePage {
+    display:flex; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:linear-gradient(135deg, #0d1117 0%, #16213e 50%, #0f3460 100%);
+    z-index:200; justify-content:center; align-items:center; flex-direction:column;
+  }
+  #homePage.hide { display:none; }
+  #homePage .home-title {
+    font-size:48px; color:#e94560; letter-spacing:6px; margin-bottom:8px;
+    text-shadow:0 0 30px rgba(233,69,96,.5);
+  }
+  #homePage .home-subtitle {
+    font-size:16px; color:#888; margin-bottom:32px; letter-spacing:2px;
+  }
+  #homePage .home-progress {
+    font-size:18px; color:#4ecca3; margin-bottom:24px;
+  }
+  #homePage .home-progress-bar {
+    width:300px; height:8px; background:#1a1a2e; border-radius:4px; margin-bottom:32px;
+    overflow:hidden; border:1px solid #0f3460;
+  }
+  #homePage .home-progress-fill {
+    height:100%; background:linear-gradient(90deg, #4ecca3, #e94560); transition:width .5s;
+  }
+  #homePage .home-levels {
+    display:flex; gap:8px; flex-wrap:wrap; justify-content:center; max-width:500px; margin-bottom:32px;
+  }
+  #homePage .home-level-btn {
+    width:48px; height:48px; border:2px solid #0f3460; background:#1a1a2e;
+    color:#aaa; font-size:18px; cursor:pointer; border-radius:6px;
+    display:flex; align-items:center; justify-content:center; transition:all .2s;
+  }
+  #homePage .home-level-btn:hover { border-color:#e94560; color:#e94560; transform:scale(1.1); }
+  #homePage .home-level-btn.completed { background:#0f3460; color:#4ecca3; border-color:#4ecca3; }
+  #homePage .home-level-btn.locked { opacity:.3; cursor:not-allowed; }
+  #homePage .home-level-btn.locked:hover { transform:none; border-color:#0f3460; color:#aaa; }
+  #homePage .home-start {
+    padding:14px 48px; font-size:20px; border:3px solid #e94560; background:#e94560;
+    color:#fff; cursor:pointer; border-radius:8px; letter-spacing:4px;
+    box-shadow:0 0 20px rgba(233,69,96,.4); transition:all .2s;
+  }
+  #homePage .home-start:hover { background:#ff5570; box-shadow:0 0 30px rgba(233,69,96,.6); transform:scale(1.05); }
 </style>
 </head>
 <body>
 
+<div id="homePage" class="hide">
+  <div class="home-title">红石逻辑解谜</div>
+  <div class="home-subtitle">Redstone Logic Puzzle</div>
+  <div class="home-progress" id="homeProgress">0 / 10 关卡完成</div>
+  <div class="home-progress-bar"><div class="home-progress-fill" id="homeProgressFill" style="width:0%"></div></div>
+  <div class="home-levels" id="homeLevels"></div>
+  <button class="home-start" id="homeStartBtn">开始游戏</button>
+</div>
+
 <div id="header">
   <h1>红石逻辑解谜</h1>
+  <button class="btn" id="homeBtn" style="padding:4px 12px;font-size:12px">&#127968; 主页</button>
   <div id="levelSelector"></div>
 </div>
 
@@ -220,6 +314,7 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
   <span style="width:10px"></span>
   <button class="btn" id="saveBtn">&#128190; 存档</button>
   <button class="btn" id="loadBtn">&#128194; 读档</button>
+  <button class="btn" id="soundBtn">&#128266; 音效</button>
   <input type="file" id="fileInput" accept=".json" style="display:none">
   <span style="flex:1"></span>
   <span style="font-size:12px;color:#888">左键放置 | 右键移除 | R键旋转</span>
@@ -243,7 +338,27 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
   </div>
 </div>
 
+<div id="failModal">
+  <div class="panel">
+    <h2>挑战失败</h2>
+    <p id="failInfo"></p>
+    <div style="display:flex;justify-content:center;gap:16px">
+      <button class="btn primary" id="failRetryBtn">重试</button>
+      <button class="btn" id="failCloseBtn">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div id="tip"></div>
+
+<div id="finalModal">
+  <div class="panel">
+    <h2>全部通关!</h2>
+    <div class="stars" id="finalStars">★ ★ ★ ★ ★</div>
+    <p id="finalInfo">恭喜你完成了所有关卡！<br>你已经掌握了红石逻辑的精髓！</p>
+    <button class="btn primary" id="finalCloseBtn">再来一次</button>
+  </div>
+</div>
 
 <div id="introModal">
   <div class="panel">
@@ -257,6 +372,41 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
 </div>
 
 <script>
+// ============================================================
+//  音效系统 (Web Audio API)
+// ============================================================
+let audioCtx = null;
+let soundEnabled = true;
+function getAudio() { if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { soundEnabled = false; } } return audioCtx; }
+function playTone(freq, dur, type, vol) {
+  if (!soundEnabled) return;
+  let ctx = getAudio(); if (!ctx) return;
+  let osc = ctx.createOscillator(), gain = ctx.createGain();
+  osc.type = type || 'square'; osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, ctx.currentTime);
+  gain.gain.linearRampToValueAtTime(vol || 0.15, ctx.currentTime + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.start(); osc.stop(ctx.currentTime + dur);
+}
+function playPlace() { playTone(440, 0.08, 'square', 0.12); }
+function playRemove() { playTone(220, 0.08, 'sawtooth', 0.10); }
+function playRotate() { playTone(330, 0.06, 'triangle', 0.10); }
+function playClick() { playTone(600, 0.05, 'square', 0.08); }
+function playWin() {
+  let notes = [523, 659, 784, 1047];
+  notes.forEach((f, i) => setTimeout(() => playTone(f, 0.15, 'square', 0.15), i * 100));
+}
+function playFinalWin() {
+  let notes = [523, 659, 784, 1047, 1319, 1568];
+  notes.forEach((f, i) => setTimeout(() => playTone(f, 0.2, 'square', 0.18), i * 120));
+}
+function playSignal() { playTone(880, 0.03, 'sine', 0.05); }
+function playFail() {
+  let notes = [400, 350, 300, 250];
+  notes.forEach((f, i) => setTimeout(() => playTone(f, 0.12, 'sawtooth', 0.12), i * 80));
+}
+
 // ============================================================
 //  常量定义
 // ============================================================
@@ -442,6 +592,9 @@ function tickUpdate() {
     }
   }
   G.signals = newSig;
+  let hasActiveSignal = false;
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { if (newSig[x][y] > 0) { hasActiveSignal = true; break; } }
+  if (hasActiveSignal) playSignal();
   checkOutput();
   updateInfoBar();
   G.tick++;
@@ -449,9 +602,14 @@ function tickUpdate() {
   if (!G.inputActive && G.tick > maxDuration + 10) {
     let anySignal = false, anyEvent = false;
     for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { if (G.signals[x][y] > 0) anySignal = true; if (G.grid[x][y].eventQueue && G.grid[x][y].eventQueue.length > 0) anyEvent = true; }
-    if (!anySignal && !anyEvent && !G.outputPowered) pauseSimulation();
+    if (!anySignal && !anyEvent && !G.outputPowered) endSimulation();
   }
-  if (G.tick > maxDuration + 50) pauseSimulation();
+  if (G.tick > maxDuration + 50) endSimulation();
+}
+
+function endSimulation() {
+  pauseSimulation();
+  if (!G.completed.has(G.levelIdx)) showFailModal();
 }
 
 function checkOutput() {
@@ -879,7 +1037,7 @@ canvas.addEventListener('click', (e) => {
         if (cell.type === T.REPEATER) cell.delay = (cell.delay % 4) + 1;
         else if (cell.type === T.COMPARATOR) cell.mode = cell.mode === 'compare' ? 'subtract' : 'compare';
         else cell.direction = (cell.direction + 1) % 4;
-        render();
+        playClick(); render();
       }
       return;
     }
@@ -887,12 +1045,12 @@ canvas.addEventListener('click', (e) => {
     cell.type = G.selectedComp; cell.direction = G.selectedRotate; cell.delay = 1; cell.mode = 'compare';
     cell.outputActive=false; cell.prevInput=false; cell.eventQueue=[]; cell.extinguished=false; cell.pulsing=false; cell.pulseTimer=0; cell.prevFrontSignal=0; cell.outputStrength=0; cell.cooldown=0;
     G.compCounts[G.selectedComp] = (G.compCounts[G.selectedComp] || 0) + 1;
-    resetSimulation(); updateInfoBar(); render();
+    playPlace(); resetSimulation(); updateInfoBar(); render();
   } else if (G.selectedComp === 'erase') {
     if (cell.type === T.EMPTY || cell.type === T.INPUT || cell.type === T.OUTPUT) return;
     G.compCounts[cell.type] = Math.max(0, (G.compCounts[cell.type] || 1) - 1);
     cell.type = T.EMPTY; cell.direction = 0; cell.delay = 1;
-    resetSimulation(); updateInfoBar(); render();
+    playRemove(); resetSimulation(); updateInfoBar(); render();
   }
 });
 canvas.addEventListener('contextmenu', (e) => {
@@ -906,20 +1064,23 @@ canvas.addEventListener('contextmenu', (e) => {
   if (cell.type === T.EMPTY || cell.type === T.INPUT || cell.type === T.OUTPUT) return;
   G.compCounts[cell.type] = Math.max(0, (G.compCounts[cell.type] || 1) - 1);
   cell.type = T.EMPTY; cell.direction = 0;
-  resetSimulation(); updateInfoBar(); render();
+  playRemove(); resetSimulation(); updateInfoBar(); render();
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'r' || e.key === 'R') { G.selectedRotate = (G.selectedRotate + 1) % 4; showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); }
+  if (e.key === 'r' || e.key === 'R') { G.selectedRotate = (G.selectedRotate + 1) % 4; playRotate(); showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); }
   if (e.key === ' ') { e.preventDefault(); if (G.running) pauseSimulation(); else startSimulation(); }
 });
 
-document.getElementById('playBtn').onclick = () => { if (G.running) pauseSimulation(); else startSimulation(); };
-document.getElementById('resetBtn').onclick = () => resetSimulation();
-document.getElementById('stepBtn').onclick = () => stepSimulation();
-document.getElementById('rotateBtn').onclick = () => { G.selectedRotate = (G.selectedRotate + 1) % 4; showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); };
-document.getElementById('nextBtn').onclick = () => { document.getElementById('winModal').classList.remove('show'); if (G.levelIdx + 1 < LEVELS.length) loadLevel(G.levelIdx + 1); else showTip('恭喜！已通关全部关卡！'); };
-document.getElementById('retryBtn').onclick = () => { document.getElementById('winModal').classList.remove('show'); loadLevel(G.levelIdx); };
+document.getElementById('playBtn').onclick = () => { playClick(); if (G.running) pauseSimulation(); else startSimulation(); };
+document.getElementById('resetBtn').onclick = () => { playClick(); resetSimulation(); };
+document.getElementById('stepBtn').onclick = () => { playClick(); stepSimulation(); };
+document.getElementById('rotateBtn').onclick = () => { playRotate(); G.selectedRotate = (G.selectedRotate + 1) % 4; showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); };
+document.getElementById('nextBtn').onclick = () => { playClick(); document.getElementById('winModal').classList.remove('show'); if (G.levelIdx + 1 < LEVELS.length) loadLevel(G.levelIdx + 1); else showFinalModal(); };
+document.getElementById('retryBtn').onclick = () => { playClick(); document.getElementById('winModal').classList.remove('show'); loadLevel(G.levelIdx); };
+document.getElementById('finalCloseBtn').onclick = () => { playClick(); document.getElementById('finalModal').classList.remove('show'); showHome(); };
+document.getElementById('failRetryBtn').onclick = () => { playClick(); document.getElementById('failModal').classList.remove('show'); loadLevel(G.levelIdx); };
+document.getElementById('failCloseBtn').onclick = () => { playClick(); document.getElementById('failModal').classList.remove('show'); };
 
 function showWinModal() {
   let modal = document.getElementById('winModal');
@@ -931,6 +1092,40 @@ function showWinModal() {
   document.getElementById('winStars').textContent = '\u2605 '.repeat(stars).trim() + ' \u2606'.repeat(3 - stars);
   document.getElementById('winInfo').innerHTML = '<b style="font-size:22px;color:#4ecca3">' + G.level.name + '</b><br><br>延迟: ' + G.outputDelay + ' tick (目标 ' + G.level.target.delay + ')<br>持续: ' + G.outputDuration + ' tick (目标 ' + G.level.target.duration + ')<br>使用元件: ' + totalUsed + ' / 推荐 ' + par;
   modal.classList.add('show');
+  playWin();
+}
+
+function showFailModal() {
+  let modal = document.getElementById('failModal');
+  let target = G.level.target;
+  let info = '';
+  if (G.outputDelay < 0) {
+    info = '<b style="font-size:18px;color:#e94560">信号未能到达输出点！</b><br><br>请检查电路是否正确连接了输入和输出。<br>提示: ' + (G.level.hint || '');
+  } else {
+    info = '<b style="font-size:18px;color:#e94560">' + G.level.name + '</b><br><br>';
+    let delayOk = G.outputDelay === target.delay;
+    let durationOk = G.outputDuration === target.duration;
+    info += '延迟: <span style="color:' + (delayOk ? '#4ecca3' : '#e94560') + '">' + G.outputDelay + ' tick</span>' + (delayOk ? ' \u2713' : ' (目标 ' + target.delay + ')') + '<br>';
+    info += '持续: <span style="color:' + (durationOk ? '#4ecca3' : '#e94560') + '">' + G.outputDuration + ' tick</span>' + (durationOk ? ' \u2713' : ' (目标 ' + target.duration + ')') + '<br><br>';
+    if (!delayOk && !durationOk) info += '延迟和持续均不匹配，请调整信号路径。';
+    else if (!delayOk) info += '延迟不匹配，请调整路径长度或中继器档位。';
+    else info += '持续时间不匹配，请调整信号路径或输入配置。';
+  }
+  document.getElementById('failInfo').innerHTML = info;
+  modal.classList.add('show');
+  playFail();
+}
+
+function showFinalModal() {
+  let modal = document.getElementById('finalModal');
+  let totalStars = 0;
+  for (let i = 0; i < LEVELS.length; i++) {
+    if (G.completed.has(i)) totalStars++;
+  }
+  document.getElementById('finalStars').textContent = '\u2605 '.repeat(Math.min(totalStars, 5)).trim();
+  document.getElementById('finalInfo').innerHTML = '恭喜你完成了全部 ' + LEVELS.length + ' 个关卡！<br>你已经掌握了红石逻辑的精髓！<br><br>通关关卡: ' + totalStars + ' / ' + LEVELS.length;
+  modal.classList.add('show');
+  playFinalWin();
 }
 
 let tipTimer = null;
@@ -971,6 +1166,7 @@ function loadFromFile(file) {
       buildComponentBar(); buildLevelSelector(); updateInfoBar();
       document.getElementById('hint').textContent = '提示: ' + (G.level.hint || '');
       pauseSimulation(); resizeCanvas(); render();
+      hideHome();
       showTip('存档已读取！');
     } catch (err) { showTip('读取失败：' + err.message); }
   };
@@ -980,7 +1176,39 @@ document.getElementById('saveBtn').onclick = () => saveToFile();
 document.getElementById('loadBtn').onclick = () => { document.getElementById('fileInput').click(); };
 document.getElementById('fileInput').onchange = (e) => { if (e.target.files.length > 0) { loadFromFile(e.target.files[0]); e.target.value = ''; } };
 
-function init() { loadLevel(0); }
+function init() { loadLevel(0); showHome(); }
+
+function showHome() {
+  let completedCount = G.completed.size;
+  let total = LEVELS.length;
+  document.getElementById('homeProgress').textContent = completedCount + ' / ' + total + ' 关卡完成';
+  document.getElementById('homeProgressFill').style.width = (completedCount / total * 100) + '%';
+  let startBtn = document.getElementById('homeStartBtn');
+  if (completedCount === 0) startBtn.textContent = '开始游戏';
+  else if (completedCount >= total) startBtn.textContent = '再次挑战';
+  else startBtn.textContent = '继续游戏';
+  let levelsEl = document.getElementById('homeLevels');
+  levelsEl.innerHTML = '';
+  for (let i = 0; i < LEVELS.length; i++) {
+    let btn = document.createElement('button');
+    btn.className = 'home-level-btn'; btn.textContent = i + 1;
+    if (G.completed.has(i)) btn.classList.add('completed');
+    if (i > 0 && !G.completed.has(i - 1) && !G.completed.has(i)) btn.classList.add('locked');
+    btn.onclick = () => { if (!btn.classList.contains('locked')) { playClick(); hideHome(); loadLevel(i); } };
+    levelsEl.appendChild(btn);
+  }
+  document.getElementById('homePage').classList.remove('hide');
+}
+function hideHome() { document.getElementById('homePage').classList.add('hide'); }
+
+document.getElementById('homeBtn').onclick = () => { playClick(); pauseSimulation(); showHome(); };
+document.getElementById('homeStartBtn').onclick = () => {
+  playClick(); hideHome();
+  let nextLevel = 0;
+  for (let i = 0; i < LEVELS.length; i++) { if (!G.completed.has(i)) { nextLevel = i; break; } }
+  if (G.completed.size >= LEVELS.length) nextLevel = 0;
+  loadLevel(nextLevel);
+};
 init();
 </script>
 </body>
