@@ -118,7 +118,7 @@
   #tip {
     display:none; position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
     background:#16213e; border:2px solid #e94560; border-radius:6px;
-    padding:8px 16px; color:#e94560; font-size:13px; z-index:50;
+    padding:8px 16px; color:#e94560; font-size:13px; z-index:300;
     animation:fadeIn .3s;
   }
   #tip.show { display:block; }
@@ -206,6 +206,68 @@
     box-shadow:0 0 20px rgba(233,69,96,.4); transition:all .2s;
   }
   #homePage .home-start:hover { background:#ff5570; box-shadow:0 0 30px rgba(233,69,96,.6); transform:scale(1.05); }
+  /* 联机弹窗 */
+  #onlineModal {
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,.8); z-index:130; justify-content:center; align-items:center;
+  }
+  #onlineModal.show { display:flex; }
+  #onlineModal .panel {
+    background:#16213e; border:3px solid #0f3460; border-radius:10px;
+    padding:28px 36px; text-align:center; max-width:560px; width:90%;
+  }
+  #onlineModal h2 { color:#4ecca3; font-size:22px; margin-bottom:6px; }
+  #onlineModal .mp-subtitle { color:#888; font-size:12px; margin-bottom:18px; }
+  #onlineModal .mp-status {
+    padding:8px 16px; border-radius:6px; margin-bottom:16px; font-size:13px;
+    background:#16213e; color:#888; border:1px solid #0f3460;
+  }
+  #onlineModal .mp-status.online { background:#0f3460; color:#4ecca3; border-color:#4ecca3; }
+  #onlineModal .mp-btns { display:flex; gap:10px; justify-content:center; margin-bottom:16px; }
+  #onlineModal .mp-btn {
+    padding:12px 28px; border:2px solid #0f3460; background:#1a1a2e;
+    color:#e0e0e0; cursor:pointer; border-radius:6px; font-size:14px; flex:1; max-width:200px;
+  }
+  #onlineModal .mp-btn:hover { border-color:#e94560; color:#e94560; }
+  #onlineModal .mp-btn.host { border-color:#4ecca3; color:#4ecca3; }
+  #onlineModal .mp-btn.host:hover { background:#4ecca3; color:#1a1a2e; }
+  #onlineModal .mp-btn.join { border-color:#e94560; color:#e94560; }
+  #onlineModal .mp-btn.join:hover { background:#e94560; color:#fff; }
+  #onlineModal .mp-section { margin-bottom:14px; text-align:left; }
+  #onlineModal .mp-section .mp-label { color:#888; font-size:11px; margin-bottom:4px; }
+  #onlineModal .mp-section textarea {
+    width:100%; height:70px; background:#0d1117; color:#4ecca3;
+    border:1px solid #0f3460; border-radius:4px; padding:8px;
+    font-family:monospace; font-size:11px; resize:none;
+  }
+  #onlineModal .mp-section .mp-copy-btn {
+    margin-top:4px; padding:4px 12px; border:1px solid #0f3460; background:#1a1a2e;
+    color:#aaa; cursor:pointer; border-radius:3px; font-size:11px;
+  }
+  #onlineModal .mp-section .mp-copy-btn:hover { border-color:#4ecca3; color:#4ecca3; }
+  #onlineModal .mp-zone-info {
+    display:flex; gap:12px; justify-content:center; margin-bottom:14px;
+  }
+  #onlineModal .mp-zone-info .zone-card {
+    flex:1; padding:10px; border-radius:6px; text-align:center; font-size:13px;
+  }
+  #onlineModal .mp-zone-info .zone-left { background:rgba(233,69,96,.15); border:1px solid #e94560; color:#e94560; }
+  #onlineModal .mp-zone-info .zone-right { background:rgba(78,204,163,.15); border:1px solid #4ecca3; color:#4ecca3; }
+  #onlineModal .mp-zone-info .zone-card.active { box-shadow:0 0 12px rgba(255,255,255,.2); }
+  #onlineModal .mp-close-btn {
+    padding:8px 24px; border:2px solid #0f3460; background:#1a1a2e;
+    color:#888; cursor:pointer; border-radius:4px; font-size:13px; margin-top:8px;
+  }
+  #onlineModal .mp-close-btn:hover { border-color:#e94560; color:#e94560; }
+  #onlineModal .mp-disconnect-btn {
+    padding:8px 24px; border:2px solid #e94560; background:#e94560;
+    color:#fff; cursor:pointer; border-radius:4px; font-size:13px; margin-top:8px;
+  }
+  #mpIndicator {
+    display:none; padding:4px 12px; border-radius:4px; font-size:12px;
+    background:#0f3460; color:#4ecca3; border:1px solid #4ecca3;
+  }
+  #mpIndicator.show { display:inline-block; }
 </style>
 </head>
 <body>
@@ -221,6 +283,7 @@
 
 <div id="header">
   <h1>红石逻辑解谜</h1>
+  <span id="mpIndicator"></span>
   <div id="levelSelector"></div>
 </div>
 
@@ -246,6 +309,7 @@
   <button class="btn" id="saveBtn">&#128190; 存档</button>
   <button class="btn" id="loadBtn">&#128194; 读档</button>
   <button class="btn" id="soundBtn">&#128266; 音效</button>
+  <button class="btn" id="onlineBtn">&#128279; 联机</button>
   <button class="btn" id="homeBtn">&#127968; 主页</button>
   <input type="file" id="fileInput" accept=".json" style="display:none">
   <span style="flex:1"></span>
@@ -303,6 +367,54 @@
   </div>
 </div>
 
+<!-- 联机弹窗 -->
+<div id="onlineModal">
+  <div class="panel">
+    <h2>&#128279; 联机模式</h2>
+    <div class="mp-subtitle">双人协作 — 各自负责左/右半区</div>
+    <div class="mp-status" id="mpStatus">&#9888; 未连接</div>
+    <div class="mp-zone-info">
+      <div class="zone-card zone-left" id="zoneCardLeft">
+        <b>P1 左区</b><br><span style="font-size:11px;color:#888">主机</span>
+      </div>
+      <div class="zone-card zone-right" id="zoneCardRight">
+        <b>P2 右区</b><br><span style="font-size:11px;color:#888">加入方</span>
+      </div>
+    </div>
+    <div class="mp-btns" id="mpRoleBtns">
+      <button class="mp-btn host" id="mpHostBtn">&#127918; 创建房间（左区）</button>
+      <button class="mp-btn join" id="mpJoinBtn">&#128279; 加入房间（右区）</button>
+    </div>
+    <!-- 主机：生成邀请码 -->
+    <div class="mp-section" id="mpOfferSection" style="display:none">
+      <div class="mp-label">&#128203; 邀请码（复制发给队友）</div>
+      <textarea id="mpOfferCode" readonly></textarea>
+      <button class="mp-copy-btn" id="mpCopyOfferBtn">&#128203; 复制邀请码</button>
+    </div>
+    <!-- 主机：粘贴应答码 -->
+    <div class="mp-section" id="mpAnswerInputSection" style="display:none">
+      <div class="mp-label">粘贴队友的应答码</div>
+      <textarea id="mpAnswerInput" placeholder="粘贴应答码..."></textarea>
+      <button class="mp-btn join" id="mpConfirmAnswerBtn" style="margin-top:4px;width:100%;max-width:none">确认应答码</button>
+    </div>
+    <!-- 加入方：粘贴邀请码 -->
+    <div class="mp-section" id="mpJoinSection" style="display:none">
+      <div class="mp-label">粘贴队友的邀请码</div>
+      <textarea id="mpJoinInput" placeholder="粘贴邀请码..."></textarea>
+      <button class="mp-btn host" id="mpSendJoinBtn" style="margin-top:4px;width:100%;max-width:none">连接</button>
+    </div>
+    <!-- 加入方：生成应答码 -->
+    <div class="mp-section" id="mpAnswerSection" style="display:none">
+      <div class="mp-label">&#128203; 应答码（复制发给主机）</div>
+      <textarea id="mpAnswerCode" readonly></textarea>
+      <button class="mp-copy-btn" id="mpCopyAnswerBtn">&#128203; 复制应答码</button>
+    </div>
+    <button class="mp-close-btn" id="mpCloseBtn">关闭</button>
+    <button class="mp-disconnect-btn" id="mpDisconnectBtn" style="display:none">断开连接</button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/simple-peer@9.11.1/simplepeer.min.js"></script>
 <script>
 // ============================================================
 //  音效系统 (Web Audio API)
@@ -549,6 +661,342 @@ let G = {
   inputStates: [], logicResult: null, levelLayouts: {},
 };
 
+// ============================================================
+//  联机系统 (P2P / WebRTC via simple-peer)
+// ============================================================
+let MP = {
+  enabled: false,         // 联机模式已开启
+  peer: null,             // SimplePeer 实例
+  isHost: false,          // 是否主机（左区）
+  connected: false,       // 连接已建立
+  myZone: null,           // 'left' | 'right'
+  boundary: 0,            // 分界线 x 坐标（>= boundary 为右区）
+  remoteCursor: { x: -1, y: -1 }, // 队友光标
+  syncing: false,         // 正在处理远端同步（防止回环）
+};
+
+// --- 区域判定 ---
+function calcBoundary() { MP.boundary = Math.floor(G.cols / 2); }
+function isInMyZone(x) {
+  if (!MP.enabled || !MP.connected) return true;
+  if (MP.myZone === 'left') return x < MP.boundary;
+  return x >= MP.boundary;
+}
+function getZoneOf(x) {
+  if (!MP.enabled) return null;
+  return x < MP.boundary ? 'left' : 'right';
+}
+
+// --- 发送消息 ---
+function sendToPeer(msg) {
+  if (MP.connected && MP.peer && !MP.syncing) {
+    try { MP.peer.send(JSON.stringify(msg)); } catch(e) { console.error('send error', e); }
+  }
+}
+
+// --- 更新联机状态指示 ---
+function updateMPIndicator() {
+  let el = document.getElementById('mpIndicator');
+  if (!MP.enabled) { el.classList.remove('show'); el.textContent = ''; return; }
+  el.classList.add('show');
+  if (MP.connected) {
+    let zone = MP.myZone === 'left' ? '左区(P1)' : '右区(P2)';
+    el.textContent = '\uD83D\uDFE2 联机中 · ' + zone;
+    el.style.borderColor = '#4ecca3'; el.style.color = '#4ecca3'; el.style.background = '#0f3460';
+  } else {
+    el.textContent = '\uD83D\uDFE1 联机模式 · 未连接';
+    el.style.borderColor = '#e94560'; el.style.color = '#e94560'; el.style.background = '#1a1a2e';
+  }
+}
+
+// --- 更新弹窗状态 ---
+function setMPStatus(text, online) {
+  let el = document.getElementById('mpStatus');
+  el.textContent = text;
+  el.className = 'mp-status' + (online ? ' online' : '');
+}
+function hideMPSections() {
+  ['mpOfferSection','mpAnswerInputSection','mpJoinSection','mpAnswerSection'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+}
+
+// --- 检查 SimplePeer 是否加载 ---
+function checkSimplePeer() {
+  if (typeof SimplePeer === 'undefined') {
+    setMPStatus('❌ 联机库未加载，请检查网络连接', false);
+    showTip('联机库加载失败，请刷新页面重试');
+    return false;
+  }
+  return true;
+}
+
+// --- 创建房间（主机 / 左区） ---
+function mpStartHost() {
+  if (!checkSimplePeer()) return;
+  if (MP.peer) { setMPStatus('⚠ 已有连接，请先断开', false); return; }
+  MP.isHost = true; MP.myZone = 'left';
+  setMPStatus('🟡 正在生成邀请码...', false);
+  document.getElementById('mpRoleBtns').style.display = 'none';
+  document.getElementById('zoneCardLeft').classList.add('active');
+  document.getElementById('zoneCardRight').classList.remove('active');
+
+  MP.peer = new SimplePeer({ initiator: true, trickle: false });
+  MP.peer.on('signal', function(data) {
+    document.getElementById('mpOfferCode').value = JSON.stringify(data);
+    document.getElementById('mpOfferSection').style.display = 'block';
+    document.getElementById('mpAnswerInputSection').style.display = 'block';
+    setMPStatus('🟡 邀请码已生成，等待队友应答', false);
+  });
+  MP.peer.on('connect', onPeerConnect);
+  MP.peer.on('data', onPeerData);
+  MP.peer.on('error', onPeerError);
+  MP.peer.on('close', onPeerClose);
+}
+
+// --- 加入房间（加入方 / 右区） ---
+function mpStartJoin() {
+  if (MP.peer) { setMPStatus('⚠ 已有连接，请先断开', false); return; }
+  MP.isHost = false; MP.myZone = 'right';
+  document.getElementById('mpRoleBtns').style.display = 'none';
+  hideMPSections();
+  document.getElementById('mpJoinSection').style.display = 'block';
+  document.getElementById('zoneCardRight').classList.add('active');
+  document.getElementById('zoneCardLeft').classList.remove('active');
+  setMPStatus('🟡 请粘贴队友的邀请码', false);
+  document.getElementById('mpJoinInput').value = '';
+  document.getElementById('mpJoinInput').focus();
+}
+
+// --- 加入方：发送邀请码并生成应答码 ---
+function mpSendJoin() {
+  if (!checkSimplePeer()) return;
+  let code = document.getElementById('mpJoinInput').value.trim();
+  if (!code) { setMPStatus('⚠ 请粘贴邀请码', false); return; }
+  let signal;
+  try { signal = JSON.parse(code); } catch(e) { setMPStatus('❌ 无效的邀请码', false); return; }
+
+  setMPStatus('🟡 正在连接主机...', false);
+  MP.peer = new SimplePeer({ initiator: false, trickle: false });
+  MP.peer.on('signal', function(data) {
+    document.getElementById('mpAnswerCode').value = JSON.stringify(data);
+    document.getElementById('mpAnswerSection').style.display = 'block';
+    document.getElementById('mpJoinSection').style.display = 'none';
+    setMPStatus('🟡 应答码已生成，请复制发给主机', false);
+  });
+  MP.peer.on('connect', onPeerConnect);
+  MP.peer.on('data', onPeerData);
+  MP.peer.on('error', onPeerError);
+  MP.peer.on('close', onPeerClose);
+  MP.peer.signal(signal);
+}
+
+// --- 主机：确认应答码 ---
+function mpConfirmAnswer() {
+  let code = document.getElementById('mpAnswerInput').value.trim();
+  if (!code) { setMPStatus('⚠ 请粘贴应答码', false); return; }
+  let signal;
+  try { signal = JSON.parse(code); } catch(e) { setMPStatus('❌ 无效的应答码', false); return; }
+  setMPStatus('🟡 正在建立连接...', false);
+  MP.peer.signal(signal);
+}
+
+// --- 连接建立 ---
+function onPeerConnect() {
+  MP.connected = true;
+  MP.enabled = true;
+  setMPStatus('🟢 连接成功！', true);
+  hideMPSections();
+  document.getElementById('mpRoleBtns').style.display = 'none';
+  document.getElementById('mpDisconnectBtn').style.display = 'inline-block';
+  updateMPIndicator();
+  calcBoundary();
+  render();
+  // 主机同步当前状态给加入方
+  if (MP.isHost) {
+    setTimeout(() => { syncFullState(); }, 300);
+  }
+  showTip(MP.myZone === 'left' ? '你是 P1 左区主机' : '你是 P2 右区加入方');
+}
+
+// --- 连接错误 ---
+function onPeerError(err) {
+  setMPStatus('❌ 错误: ' + err.message, false);
+  console.error('peer error', err);
+}
+
+// --- 连接关闭 ---
+function onPeerClose() {
+  let wasConnected = MP.connected;
+  MP.connected = false;
+  MP.peer = null;
+  if (wasConnected) {
+    setMPStatus('⚪ 连接已断开', false);
+    updateMPIndicator();
+    render();
+    showTip('队友已断开');
+  } else {
+    setMPStatus('⚪ 连接失败，请重试', false);
+  }
+  document.getElementById('mpDisconnectBtn').style.display = 'none';
+  document.getElementById('mpRoleBtns').style.display = 'flex';
+  hideMPSections();
+  document.getElementById('zoneCardLeft').classList.remove('active');
+  document.getElementById('zoneCardRight').classList.remove('active');
+}
+
+// --- 断开连接 ---
+function mpDisconnect() {
+  if (MP.peer) { try { MP.peer.destroy(); } catch(e){} MP.peer = null; }
+  MP.connected = false; MP.enabled = false; MP.myZone = null;
+  MP.remoteCursor = { x: -1, y: -1 };
+  setMPStatus('⚪ 未连接', false);
+  updateMPIndicator();
+  document.getElementById('mpDisconnectBtn').style.display = 'none';
+  document.getElementById('mpRoleBtns').style.display = 'flex';
+  hideMPSections();
+  document.getElementById('zoneCardLeft').classList.remove('active');
+  document.getElementById('zoneCardRight').classList.remove('active');
+  render();
+}
+
+// --- 全状态同步（任一方可发起） ---
+function syncFullState() {
+  if (!MP.connected) return;
+  let layout = [];
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+    let c = G.grid[x][y];
+    if (c.type === T.EMPTY || c.type === T.INPUT || c.type === T.OUTPUT) continue;
+    layout.push({ x, y, type: c.type, direction: c.direction, delay: c.delay, mode: c.mode });
+  }
+  sendToPeer({ t: 'fullSync', levelIdx: G.levelIdx, layout: layout });
+}
+
+// --- 处理远端数据 ---
+function onPeerData(data) {
+  let msg;
+  try { msg = JSON.parse(data.toString()); } catch(e) { return; }
+  MP.syncing = true;
+  switch (msg.t) {
+    case 'place': {
+      let c = G.grid[msg.x][msg.y];
+      if (c.type === T.EMPTY) {
+        c.type = msg.comp; c.direction = msg.dir; c.delay = msg.delay || 1; c.mode = msg.mode || 'compare';
+        c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false;
+        c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0;
+        G.compCounts[msg.comp] = (G.compCounts[msg.comp] || 0) + 1;
+        resetSimulation(); updateInfoBar(); render();
+      }
+      break;
+    }
+    case 'remove': {
+      let c = G.grid[msg.x][msg.y];
+      if (c.type !== T.EMPTY && c.type !== T.INPUT && c.type !== T.OUTPUT) {
+        G.compCounts[c.type] = Math.max(0, (G.compCounts[c.type] || 1) - 1);
+        c.type = T.EMPTY; c.direction = 0; c.delay = 1;
+        resetSimulation(); updateInfoBar(); render();
+      }
+      break;
+    }
+    case 'modify': {
+      let c = G.grid[msg.x][msg.y];
+      if (c.type === msg.comp) {
+        if (msg.dir !== undefined) c.direction = msg.dir;
+        if (msg.delay !== undefined) c.delay = msg.delay;
+        if (msg.mode !== undefined) c.mode = msg.mode;
+        resetSimulation(); render();
+      }
+      break;
+    }
+    case 'reset': { resetSimulation(); break; }
+    case 'play': { if (!G.running) startSimulation(); break; }
+    case 'pause': { if (G.running) pauseSimulation(); break; }
+    case 'step': { stepSimulation(); break; }
+    case 'level': {
+      if (msg.idx >= 0 && msg.idx < LEVELS.length && msg.idx !== G.levelIdx) {
+        loadLevel(msg.idx);
+      }
+      break;
+    }
+    case 'fullSync': {
+      if (msg.levelIdx !== undefined && msg.levelIdx !== G.levelIdx) {
+        G.levelIdx = msg.levelIdx; G.level = LEVELS[msg.levelIdx]; G.selectedComp = null;
+        initGrid(G.level);
+      } else {
+        // 同关卡清空自定义元件再重建
+        for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+          let c = G.grid[x][y];
+          if (c.type !== T.INPUT && c.type !== T.OUTPUT) {
+            c.type = T.EMPTY; c.direction = 0; c.delay = 1;
+          }
+        }
+        G.compCounts = {};
+      }
+      // 应用远端布局（不调用 restoreLayout，完全以远端为准）
+      if (msg.layout) {
+        for (let item of msg.layout) {
+          if (item.x < 0 || item.x >= G.cols || item.y < 0 || item.y >= G.rows) continue;
+          let c = G.grid[item.x][item.y];
+          if (c.type === T.INPUT || c.type === T.OUTPUT) continue;
+          c.type = item.type; c.direction = item.direction || 0;
+          c.delay = item.delay || 1; c.mode = item.mode || 'compare';
+          c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false;
+          c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0;
+          G.compCounts[item.type] = (G.compCounts[item.type] || 0) + 1;
+        }
+      }
+      calcBoundary();
+      buildComponentBar(); buildLevelSelector(); updateInfoBar();
+      document.getElementById('hint').textContent = '提示: ' + (G.level.hint || '');
+      pauseSimulation(); resizeCanvas(); render();
+      break;
+    }
+    case 'cursor': { MP.remoteCursor = { x: msg.x, y: msg.y }; render(); break; }
+  }
+  MP.syncing = false;
+}
+
+// --- 打开/关闭联机弹窗 ---
+function openOnlineModal() {
+  document.getElementById('onlineModal').classList.add('show');
+}
+function closeOnlineModal() {
+  document.getElementById('onlineModal').classList.remove('show');
+}
+
+// --- 复制到剪贴板 ---
+function mpCopyText(text, label) {
+  if (!text) { showTip('没有可复制的内容'); return; }
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      showTip('已复制' + (label||'') + '！');
+    }).catch(() => {
+      mpFallbackCopy(text, label);
+    });
+  } else {
+    mpFallbackCopy(text, label);
+  }
+}
+function mpFallbackCopy(text, label) {
+  let ta = document.createElement('textarea');
+  ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); showTip('已复制' + (label||'') + '！'); }
+  catch(e) { showTip('复制失败，请手动复制'); }
+  ta.remove();
+}
+
+// --- 绑定联机UI事件 ---
+document.getElementById('onlineBtn').onclick = () => { playClick(); openOnlineModal(); };
+document.getElementById('mpCloseBtn').onclick = () => { playClick(); closeOnlineModal(); };
+document.getElementById('mpHostBtn').onclick = () => { playClick(); mpStartHost(); };
+document.getElementById('mpJoinBtn').onclick = () => { playClick(); mpStartJoin(); };
+document.getElementById('mpSendJoinBtn').onclick = () => { playClick(); mpSendJoin(); };
+document.getElementById('mpConfirmAnswerBtn').onclick = () => { playClick(); mpConfirmAnswer(); };
+document.getElementById('mpDisconnectBtn').onclick = () => { playClick(); mpDisconnect(); };
+document.getElementById('mpCopyOfferBtn').onclick = () => { mpCopyText(document.getElementById('mpOfferCode').value, '邀请码'); };
+document.getElementById('mpCopyAnswerBtn').onclick = () => { mpCopyText(document.getElementById('mpAnswerCode').value, '应答码'); };
+
 function initGrid(level) {
   G.cols = level.cols; G.rows = level.rows;
   G.grid = []; G.signals = [];
@@ -581,6 +1029,7 @@ function initGrid(level) {
     }
   }
   G.compCounts = {};
+  calcBoundary();
   resetSimulation();
 }
 
@@ -734,7 +1183,10 @@ function restoreLayout(idx) {
 
 function loadLevel(idx) {
   if (idx < 0 || idx >= LEVELS.length) return;
-  if (idx > 0 && !G.completed.has(idx - 1) && !G.completed.has(idx)) { showTip('请先完成前一关！'); return; }
+  // 联机模式跳过关卡锁定
+  if (!MP.syncing) {
+    if (idx > 0 && !G.completed.has(idx - 1) && !G.completed.has(idx)) { showTip('请先完成前一关！'); return; }
+  }
   if (G.level !== null) captureLayout();
   G.levelIdx = idx; G.level = LEVELS[idx]; G.selectedComp = null;
   initGrid(G.level); restoreLayout(idx);
@@ -745,6 +1197,8 @@ function loadLevel(idx) {
   let newComps = getNewComponents(idx);
   if (newComps.length > 0) showIntroModal(newComps);
   if (LEVELS[idx].logic && !introSeen.has('logic_' + LEVELS[idx].logic)) showLogicIntro(LEVELS[idx].logic);
+  // 同步关卡切换
+  if (!MP.syncing) sendToPeer({ t: 'level', idx: idx });
 }
 
 function getNewComponents(idx) {
@@ -878,14 +1332,45 @@ function resizeCanvas() { canvas.width = G.cols * CELL; canvas.height = G.rows *
 function render() {
   let w = canvas.width, h = canvas.height;
   ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, w, h);
+  // 联机模式：左右区域着色
+  if (MP.enabled && MP.connected) {
+    ctx.fillStyle = 'rgba(233,69,96,0.05)'; ctx.fillRect(0, 0, MP.boundary * CELL, h);
+    ctx.fillStyle = 'rgba(78,204,163,0.05)'; ctx.fillRect(MP.boundary * CELL, 0, w - MP.boundary * CELL, h);
+  }
   ctx.strokeStyle = '#1a2333'; ctx.lineWidth = 1;
   for (let x = 0; x <= G.cols; x++) { ctx.beginPath(); ctx.moveTo(x*CELL,0); ctx.lineTo(x*CELL,h); ctx.stroke(); }
   for (let y = 0; y <= G.rows; y++) { ctx.beginPath(); ctx.moveTo(0,y*CELL); ctx.lineTo(w,y*CELL); ctx.stroke(); }
-  if (G.hoverX >= 0 && G.hoverY >= 0) { ctx.fillStyle = 'rgba(233,69,96,0.12)'; ctx.fillRect(G.hoverX*CELL, G.hoverY*CELL, CELL, CELL); }
+  // 联机模式：分界线
+  if (MP.enabled && MP.connected) {
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
+    ctx.beginPath(); ctx.moveTo(MP.boundary * CELL, 0); ctx.lineTo(MP.boundary * CELL, h); ctx.stroke();
+    ctx.setLineDash([]);
+    // 区域标签
+    ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillStyle = MP.myZone === 'left' ? '#e94560' : 'rgba(233,69,96,0.4)';
+    ctx.fillText('P1 左区' + (MP.myZone === 'left' ? ' (你)' : ''), 4, 2);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = MP.myZone === 'right' ? '#4ecca3' : 'rgba(78,204,163,0.4)';
+    ctx.fillText('P2 右区' + (MP.myZone === 'right' ? ' (你)' : ''), w - 4, 2);
+  }
+  if (G.hoverX >= 0 && G.hoverY >= 0) {
+    let hoverColor = (MP.enabled && MP.connected && !isInMyZone(G.hoverX)) ? 'rgba(255,215,0,0.15)' : 'rgba(233,69,96,0.12)';
+    ctx.fillStyle = hoverColor; ctx.fillRect(G.hoverX*CELL, G.hoverY*CELL, CELL, CELL);
+  }
   for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { drawCell(G.grid[x][y], x, y, G.signals[x][y] || 0); }
   if (G.hoverX >= 0 && G.hoverY >= 0 && G.selectedComp && G.selectedComp !== 'erase') {
     let cell = G.grid[G.hoverX][G.hoverY];
     if (cell.type === T.EMPTY) { ctx.globalAlpha = 0.4; drawCell({type:G.selectedComp,direction:G.selectedRotate,delay:1,mode:'compare',outputActive:false,extinguished:false,pulsing:false}, G.hoverX, G.hoverY, 0); ctx.globalAlpha = 1; }
+  }
+  // 联机模式：队友光标
+  if (MP.enabled && MP.connected && MP.remoteCursor.x >= 0 && MP.remoteCursor.y >= 0) {
+    let rx = MP.remoteCursor.x * CELL, ry = MP.remoteCursor.y * CELL;
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.setLineDash([4,2]);
+    ctx.strokeRect(rx + 1, ry + 1, CELL - 2, CELL - 2);
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(255,215,0,0.1)'; ctx.fillRect(rx, ry, CELL, CELL);
+    ctx.fillStyle = '#ffd700'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText('队友', rx + 2, ry + 2);
   }
   if (G.running) {
     for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
@@ -1076,6 +1561,10 @@ canvas.addEventListener('mousemove', (e) => {
   G.hoverX = Math.floor(mx / CELL); G.hoverY = Math.floor(my / CELL);
   if (G.hoverX >= G.cols) G.hoverX = -1; if (G.hoverY >= G.rows) G.hoverY = -1;
   render();
+  // 同步光标
+  if (MP.connected && G.hoverX >= 0) {
+    sendToPeer({ t: 'cursor', x: G.hoverX, y: G.hoverY });
+  }
 });
 canvas.addEventListener('mouseleave', () => { G.hoverX = -1; G.hoverY = -1; render(); });
 canvas.addEventListener('click', (e) => {
@@ -1084,14 +1573,20 @@ canvas.addEventListener('click', (e) => {
   let my = (e.clientY - rect.top) * (canvas.height / rect.height);
   let gx = Math.floor(mx / CELL), gy = Math.floor(my / CELL);
   if (gx < 0 || gx >= G.cols || gy < 0 || gy >= G.rows) return;
+  // 联机模式区域限制
+  if (MP.connected && !isInMyZone(gx)) { showTip('这是队友的区域，你不能在此操作'); return; }
   let cell = G.grid[gx][gy];
   if (G.selectedComp && G.selectedComp !== 'erase') {
     if (cell.type !== T.EMPTY) {
       if (cell.type === G.selectedComp) {
+        let oldDir = cell.direction, oldDelay = cell.delay, oldMode = cell.mode;
         if (cell.type === T.REPEATER) cell.delay = (cell.delay % 4) + 1;
         else if (cell.type === T.COMPARATOR) cell.mode = cell.mode === 'compare' ? 'subtract' : 'compare';
         else cell.direction = (cell.direction + 1) % 4;
         playClick(); render();
+        if (cell.direction !== oldDir || cell.delay !== oldDelay || cell.mode !== oldMode) {
+          sendToPeer({ t: 'modify', x: gx, y: gy, comp: cell.type, dir: cell.direction, delay: cell.delay, mode: cell.mode });
+        }
       }
       return;
     }
@@ -1100,11 +1595,14 @@ canvas.addEventListener('click', (e) => {
     cell.outputActive=false; cell.prevInput=false; cell.eventQueue=[]; cell.extinguished=false; cell.pulsing=false; cell.pulseTimer=0; cell.prevFrontSignal=0; cell.outputStrength=0; cell.cooldown=0;
     G.compCounts[G.selectedComp] = (G.compCounts[G.selectedComp] || 0) + 1;
     playPlace(); resetSimulation(); updateInfoBar(); render();
+    sendToPeer({ t: 'place', x: gx, y: gy, comp: G.selectedComp, dir: G.selectedRotate, delay: 1, mode: 'compare' });
   } else if (G.selectedComp === 'erase') {
     if (cell.type === T.EMPTY || cell.type === T.INPUT || cell.type === T.OUTPUT) return;
+    if (MP.connected && !isInMyZone(gx)) { showTip('这是队友区域内的元件，你不能移除'); return; }
     G.compCounts[cell.type] = Math.max(0, (G.compCounts[cell.type] || 1) - 1);
     cell.type = T.EMPTY; cell.direction = 0; cell.delay = 1;
     playRemove(); resetSimulation(); updateInfoBar(); render();
+    sendToPeer({ t: 'remove', x: gx, y: gy });
   }
 });
 canvas.addEventListener('contextmenu', (e) => {
@@ -1114,21 +1612,23 @@ canvas.addEventListener('contextmenu', (e) => {
   let my = (e.clientY - rect.top) * (canvas.height / rect.height);
   let gx = Math.floor(mx / CELL), gy = Math.floor(my / CELL);
   if (gx < 0 || gx >= G.cols || gy < 0 || gy >= G.rows) return;
+  if (MP.connected && !isInMyZone(gx)) { showTip('这是队友的区域，你不能在此操作'); return; }
   let cell = G.grid[gx][gy];
   if (cell.type === T.EMPTY || cell.type === T.INPUT || cell.type === T.OUTPUT) return;
   G.compCounts[cell.type] = Math.max(0, (G.compCounts[cell.type] || 1) - 1);
   cell.type = T.EMPTY; cell.direction = 0;
   playRemove(); resetSimulation(); updateInfoBar(); render();
+  sendToPeer({ t: 'remove', x: gx, y: gy });
 });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') { G.selectedRotate = (G.selectedRotate + 1) % 4; playRotate(); showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); }
-  if (e.key === ' ') { e.preventDefault(); if (G.running) pauseSimulation(); else startSimulation(); }
+  if (e.key === ' ') { e.preventDefault(); if (G.running) { pauseSimulation(); sendToPeer({t:'pause'}); } else { startSimulation(); sendToPeer({t:'play'}); } }
 });
 
-document.getElementById('playBtn').onclick = () => { playClick(); if (G.running) pauseSimulation(); else startSimulation(); };
-document.getElementById('resetBtn').onclick = () => { playClick(); resetSimulation(); };
-document.getElementById('stepBtn').onclick = () => { playClick(); stepSimulation(); };
+document.getElementById('playBtn').onclick = () => { playClick(); if (G.running) { pauseSimulation(); sendToPeer({t:'pause'}); } else { startSimulation(); sendToPeer({t:'play'}); } };
+document.getElementById('resetBtn').onclick = () => { playClick(); resetSimulation(); sendToPeer({t:'reset'}); };
+document.getElementById('stepBtn').onclick = () => { playClick(); stepSimulation(); sendToPeer({t:'step'}); };
 document.getElementById('rotateBtn').onclick = () => { playRotate(); G.selectedRotate = (G.selectedRotate + 1) % 4; showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); };
 document.getElementById('nextBtn').onclick = () => { playClick(); document.getElementById('winModal').classList.remove('show'); if (G.levelIdx + 1 < LEVELS.length) loadLevel(G.levelIdx + 1); else showFinalModal(); };
 document.getElementById('retryBtn').onclick = () => { playClick(); document.getElementById('winModal').classList.remove('show'); loadLevel(G.levelIdx); };
@@ -1222,6 +1722,8 @@ function loadFromFile(file) {
       pauseSimulation(); resizeCanvas(); render();
       hideHome();
       showTip('存档已读取！');
+      // 联机模式下同步给队友
+      if (MP.connected) setTimeout(() => syncFullState(), 200);
     } catch (err) { showTip('读取失败：' + err.message); }
   };
   reader.readAsText(file);
