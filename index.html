@@ -1,1 +1,183 @@
-你好
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>红石逻辑解谜 · 导航</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: #0d1117;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1.5rem;
+    }
+
+    .nav-card {
+      max-width: 720px;
+      width: 100%;
+      background: rgba(22, 33, 62, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-radius: 24px;
+      padding: 2.8rem 2.8rem;
+      border: 1px solid rgba(78, 204, 163, 0.15);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(233, 69, 96, 0.1);
+      text-align: center;
+    }
+
+    .nav-card .logo {
+      font-size: 2.4rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, #e94560, #ff6b8a);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 1px;
+      margin-bottom: 0.2rem;
+    }
+    .nav-card .sub {
+      color: #6a8aaa;
+      font-size: 0.9rem;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid rgba(58, 90, 122, 0.3);
+      padding-bottom: 1rem;
+    }
+
+    .nav-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin: 1.2rem 0 0.8rem 0;
+    }
+    .nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0.9rem 1rem;
+      border-radius: 14px;
+      background: rgba(13, 23, 33, 0.6);
+      border: 1px solid #1a2a3a;
+      text-decoration: none;
+      color: #d0dcec;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: all 0.25s ease;
+      cursor: pointer;
+    }
+    .nav-item:hover {
+      border-color: #4ecca3;
+      transform: translateY(-3px);
+      box-shadow: 0 8px 25px rgba(78, 204, 163, 0.08);
+      background: rgba(22, 33, 62, 0.8);
+    }
+    .nav-item .icon {
+      font-size: 1.3rem;
+    }
+    .nav-item.primary {
+      background: #e94560;
+      border-color: #e94560;
+      color: #fff;
+    }
+    .nav-item.primary:hover {
+      background: #ff5570;
+      border-color: #ff5570;
+      box-shadow: 0 0 20px rgba(233, 69, 96, 0.2);
+    }
+    .nav-item.outline {
+      border-color: #4ecca3;
+      color: #4ecca3;
+    }
+    .nav-item.outline:hover {
+      background: #4ecca3;
+      color: #0d1117;
+    }
+    .nav-item.full {
+      grid-column: 1 / -1;
+    }
+
+    .nav-divider {
+      grid-column: 1 / -1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #2a4a6a, transparent);
+      margin: 4px 0;
+    }
+
+    .footer-hint {
+      margin-top: 1.8rem;
+      font-size: 0.75rem;
+      color: #4a6a8a;
+      border-top: 1px solid rgba(58, 90, 122, 0.2);
+      padding-top: 1.2rem;
+    }
+
+    @media (max-width: 520px) {
+      .nav-card { padding: 1.8rem 1.2rem; }
+      .nav-grid { grid-template-columns: 1fr; }
+      .nav-item.full { grid-column: 1; }
+      .nav-card .logo { font-size: 1.8rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="nav-card">
+  <div class="logo">⚡ 红石逻辑解谜</div>
+  <div class="sub">快速导航 · 项目入口</div>
+
+  <div class="nav-grid">
+
+    <!-- 主入口 -->
+    <a href="redstone-puzzle.html" class="nav-item primary full">
+      <span class="icon">🎮</span> 打开游戏
+    </a>
+
+    <!-- 功能列表 -->
+    <a href="#" class="nav-item full" style="cursor:default; background:rgba(13,23,33,0.3); border-color:#1a2a3a; color:#6a8aaa;">
+      <span style="font-size:0.75rem;">— 项目资源 —</span>
+    </a>
+
+    <!-- 各功能项 -->
+    <a href="gen_redstone_game.py" class="nav-item outline">
+      <span class="icon">🐍</span> 生成器脚本
+    </a>
+    <a href="levels_example.json" class="nav-item">
+      <span class="icon">📦</span> 示例关卡json文件
+    </a>
+    <a href="README.md" class="nav-item">
+      <span class="icon">📖</span> 完整文档
+    </a>
+    <a href="docs.html" class="nav-item">
+      <span class="icon">📋</span> 文档
+    </a>
+	<a href="https://github.com/xuzeng2/redstone-puzzle" class="nav-item">
+      <span class="icon">code</span> github项目
+    </a>
+	<a href="#" class="nav-item" onclick="alert('不是，我还没发视频呢，你急啥'); return false;">
+      <span class="icon">B站</span> 视频
+    </a>
+    <div class="nav-divider"></div>
+
+    <!-- 外部链接 -->
+    <a href="https://minecraft.fandom.com/wiki/Redstone_circuit" target="_blank" class="nav-item full" style="border-color:#2a4a6a; color:#7a9aaa;">
+      <span class="icon">🔗</span> Minecraft 红石 Wiki
+    </a>
+  </div>
+
+  <div class="footer-hint">
+    ⚡ 用电路诠释逻辑 · MIT © 2026   联系作者3915266537@qq.com
+  </div>
+</div>
+
+</body>
+</html>
