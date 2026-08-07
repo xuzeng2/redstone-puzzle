@@ -289,7 +289,6 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
 
 <div id="header">
   <h1>红石逻辑解谜</h1>
-  <button class="btn" id="homeBtn" style="padding:4px 12px;font-size:12px">&#127968; 主页</button>
   <div id="levelSelector"></div>
 </div>
 
@@ -315,6 +314,7 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
   <button class="btn" id="saveBtn">&#128190; 存档</button>
   <button class="btn" id="loadBtn">&#128194; 读档</button>
   <button class="btn" id="soundBtn">&#128266; 音效</button>
+  <button class="btn" id="homeBtn">&#127968; 主页</button>
   <input type="file" id="fileInput" accept=".json" style="display:none">
   <span style="flex:1"></span>
   <span style="font-size:12px;color:#888">左键放置 | 右键移除 | R键旋转</span>
