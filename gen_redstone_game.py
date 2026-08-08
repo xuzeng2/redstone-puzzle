@@ -1226,6 +1226,146 @@ const COMP_INTROS = {
 const LEVELS = __LEVELS_PLACEHOLDER__;
 
 // ============================================================
+//  随机关卡生成（第18关）
+// ============================================================
+function generateRandomLevel() {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let lv = tryGenerateRandomLevel();
+    if (lv) return lv;
+  }
+  // 保底：简单直线关卡
+  return {
+    name: '随机挑战', desc: '随机生成的关卡——每次都不一样！',
+    cols: 12, rows: 6,
+    input: { x: 1, y: 3, duration: 15, strength: 15 },
+    output: { x: 10, y: 3 },
+    target: { delay: 8, duration: 15 },
+    components: ['dust', 'repeater'], limits: { dust: 12, repeater: 2 },
+    hint: '随机关卡：随机元件和目标，已通过模拟验证', par: 8, preplaced: []
+  };
+}
+
+function tryGenerateRandomLevel() {
+  let cols = 10 + Math.floor(Math.random() * 7);
+  let rows = 6 + Math.floor(Math.random() * 5);
+  let inY = 1 + Math.floor(Math.random() * (rows - 2));
+  let outY = 1 + Math.floor(Math.random() * (rows - 2));
+  let inputDur = 10 + Math.floor(Math.random() * 11);
+  let input = { x: 1, y: inY, duration: inputDur, strength: 15 };
+  let output = { x: cols - 2, y: outY };
+
+  // 生成L形路径（确保所有单元格正交相邻）
+  let path = [];
+  let cx = input.x + 1, cy = input.y;
+  let midX = input.x + 2 + Math.floor(Math.random() * Math.max(1, output.x - input.x - 4));
+  midX = Math.min(midX, output.x - 2);
+  // Phase 1: 向右到midX（含）
+  while (cx <= midX) { path.push({x: cx, y: cy, dir: 0}); cx++; }
+  cx = midX;
+  // Phase 2: 垂直到outY
+  while (cy !== outY) {
+    if (cy < outY) { cy++; path.push({x: cx, y: cy, dir: 1}); }
+    else { cy--; path.push({x: cx, y: cy, dir: 3}); }
+  }
+  // Phase 3: 向右到output前一格
+  cx = midX + 1;
+  while (cx <= output.x - 1) { path.push({x: cx, y: cy, dir: 0}); cx++; }
+
+  if (path.length < 3) return null;
+
+  // 随机选择可用元件
+  let components = ['dust'];
+  let limits = { dust: path.length + 8 };
+  let useRep = Math.random() < 0.7;
+  let useObs = Math.random() < 0.4;
+  if (useRep) { components.push('repeater'); limits.repeater = 1 + Math.floor(Math.random() * 3); }
+  if (useObs) { components.push('observer'); limits.observer = 1 + Math.floor(Math.random() * 2); }
+
+  // 构建解法
+  let solution = [];
+  let repCount = 0;
+  let dustSinceRep = 0;
+  let needRep = useRep && path.length > 12;
+  let repInterval = needRep ? Math.floor(path.length / 3) : 999;
+
+  for (let i = 0; i < path.length; i++) {
+    let cell = path[i];
+    let isLast = (i === path.length - 1);
+    if (isLast && useObs && path.length > 2) {
+      solution.push({ x: cell.x, y: cell.y, type: 'observer', direction: (cell.dir + 2) % 4 });
+    } else if (needRep && repCount < limits.repeater && dustSinceRep >= repInterval && !isLast && cell.dir === 0) {
+      let delay = 1 + Math.floor(Math.random() * 3);
+      solution.push({ x: cell.x, y: cell.y, type: 'repeater', direction: 0, delay: delay });
+      repCount++; dustSinceRep = 0;
+    } else {
+      solution.push({ x: cell.x, y: cell.y, type: 'dust' });
+      dustSinceRep++;
+    }
+  }
+
+  let level = {
+    name: '随机挑战', desc: '随机生成的关卡——每次都不一样！',
+    cols, rows, input, output,
+    components: components, limits: limits,
+    hint: '随机关卡：随机元件和目标，已通过模拟验证可解',
+    par: path.length, preplaced: solution
+  };
+
+  let result = validateSolution(level);
+  if (!result.valid) return null;
+
+  level.target = { delay: result.delay, duration: result.duration };
+  if (result.strength > 0 && result.strength < 15) level.target.strength = result.strength;
+  level.preplaced = [];
+  return level;
+}
+
+function validateSolution(level) {
+  G.validating = true;
+  let savedLevel = G.level, savedIdx = G.levelIdx, savedGrid = G.grid, savedSig = G.signals;
+  let savedTick = G.tick, savedInputActive = G.inputActive, savedInputRem = G.inputRemaining;
+  let savedOutput = { p: G.outputPowered, a: G.outputArrivalTick, d: G.outputDepartureTick,
+    dur: G.outputDuration, del: G.outputDelay, str: G.outputMaxStrength, pc: G.pulseChecked, w: G.won };
+  let savedInputStates = G.inputStates, savedCompCounts = G.compCounts;
+  let savedCols = G.cols, savedRows = G.rows;
+
+  G.level = level; G.levelIdx = -999;
+  initGrid(level);
+
+  if (G.inputStates.length > 0) { for (let s of G.inputStates) { s.remaining = s.duration; s.delay = s.origDelay; s.active = false; } }
+  else { G.inputRemaining = level.input.duration; }
+  G.inputActive = false; G.tick = 0; G.pulseChecked = false; G.won = false;
+
+  let maxDuration = G.inputStates.length > 0 ? Math.max(...G.inputStates.map(s => (s.origDelay||0) + s.duration)) : level.input.duration;
+  let maxTicks = maxDuration + 60;
+
+  for (let i = 0; i < maxTicks; i++) {
+    tickUpdate();
+    if (G.outputDuration > 0) break;
+  }
+
+  let result = {
+    valid: G.outputDelay >= 0 && G.outputDuration > 0,
+    delay: G.outputDelay, duration: G.outputDuration, strength: G.outputMaxStrength
+  };
+
+  // 恢复状态
+  G.level = savedLevel; G.levelIdx = savedIdx; G.grid = savedGrid; G.signals = savedSig;
+  G.tick = savedTick; G.inputActive = savedInputActive; G.inputRemaining = savedInputRem;
+  G.outputPowered = savedOutput.p; G.outputArrivalTick = savedOutput.a;
+  G.outputDepartureTick = savedOutput.d; G.outputDuration = savedOutput.dur;
+  G.outputDelay = savedOutput.del; G.outputMaxStrength = savedOutput.str; G.pulseChecked = savedOutput.pc; G.won = savedOutput.w;
+  G.inputStates = savedInputStates; G.compCounts = savedCompCounts;
+  G.cols = savedCols; G.rows = savedRows;
+  G.validating = false;
+
+  return result;
+}
+
+// 生成随机关卡（在G初始化后调用）
+// LEVELS.push(generateRandomLevel()); — 移至G定义后
+
+// ============================================================
 //  游戏状态
 // ============================================================
 let G = {
@@ -1235,14 +1375,15 @@ let G = {
   selectedComp: null, selectedRotate: 0,
   inputActive: false, inputRemaining: 0,
   outputPowered: false, outputArrivalTick: -1,
-  outputDepartureTick: -1, outputDuration: 0, outputDelay: -1, outputMaxStrength: 0,
+  outputDepartureTick: -1, outputDuration: 0, outputDelay: -1, outputMaxStrength: 0, pulseChecked: false, won: false,
   hoverX: -1, hoverY: -1,
+  validating: false,
   completed: new Set((() => {
     let ver = localStorage.getItem('rs_version');
-    if (ver !== '4') {
+    if (ver !== '5') {
       localStorage.removeItem('rs_completed');
       localStorage.removeItem('rs_intro_seen');
-      localStorage.setItem('rs_version', '4');
+      localStorage.setItem('rs_version', '5');
     }
     return JSON.parse(localStorage.getItem('rs_completed') || '[]');
   })()),
@@ -1352,9 +1493,9 @@ function tickUpdate() {
   G.signals = newSig;
   let hasActiveSignal = false;
   for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { if (newSig[x][y] > 0) { hasActiveSignal = true; break; } }
-  if (hasActiveSignal) playSignal();
+  if (hasActiveSignal && !G.validating) playSignal();
   checkOutput();
-  updateInfoBar();
+  if (!G.validating) updateInfoBar();
   G.tick++;
   let maxDuration = G.inputStates.length > 0 ? Math.max(...G.inputStates.map(s => (s.origDelay||0) + s.duration)) : G.level.input.duration;
   if (!G.inputActive && G.tick > maxDuration + 10) {
@@ -1367,25 +1508,30 @@ function tickUpdate() {
 
 function endSimulation() {
   pauseSimulation();
-  if (!G.completed.has(G.levelIdx)) showFailModal();
+  if (G.validating) return;
+  if (!G.won) showFailModal();
 }
 
 function checkOutput() {
   let out = G.level.output; let hasSignal = false; let maxStr = 0;
   for (let d of DIRECTIONS) { let nx=out.x+d.dx,ny=out.y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; if(G.signals[nx][ny]>0){hasSignal=true; if(G.signals[nx][ny]>maxStr)maxStr=G.signals[nx][ny];} }
-  if (hasSignal && !G.outputPowered) { G.outputPowered = true; G.outputArrivalTick = G.tick; G.outputDelay = G.tick; G.outputMaxStrength = maxStr; }
+  if (hasSignal && !G.outputPowered && !G.pulseChecked) { G.outputPowered = true; G.outputArrivalTick = G.tick; G.outputDelay = G.tick; G.outputMaxStrength = maxStr; }
   if (hasSignal && G.outputPowered && maxStr > G.outputMaxStrength) G.outputMaxStrength = maxStr;
-  if (!hasSignal && G.outputPowered) { G.outputPowered = false; G.outputDepartureTick = G.tick; G.outputDuration = G.outputDepartureTick - G.outputArrivalTick; checkWin(); }
+  if (!hasSignal && G.outputPowered) { G.outputPowered = false; G.outputDepartureTick = G.tick; G.outputDuration = G.outputDepartureTick - G.outputArrivalTick; G.pulseChecked = true; let won = checkWin(); if (!won && !G.validating) endSimulation(); }
 }
 
 function checkWin() {
+  if (G.validating) return false;
   let target = G.level.target;
   let strengthOk = target.strength === undefined || G.outputMaxStrength === target.strength;
   if (G.outputDelay === target.delay && G.outputDuration === target.duration && strengthOk) {
     G.completed.add(G.levelIdx);
     localStorage.setItem('rs_completed', JSON.stringify([...G.completed]));
+    G.won = true;
     pauseSimulation(); showWinModal();
+    return true;
   }
+  return false;
 }
 
 function startSimulation() {
@@ -1398,13 +1544,59 @@ function startSimulation() {
   document.getElementById('playBtn').textContent = '\u23F8 暂停';
   G.timer = setInterval(() => { tickUpdate(); render(); }, TICK_MS);
 }
-function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.timer); G.timer = null; } document.getElementById('playBtn').textContent = '\u25B6 播放'; }
+function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.timer); G.timer = null; } if (!G.validating) document.getElementById('playBtn').textContent = '\u25B6 播放'; }
+function initRestingSignals() {
+  // 迭代计算静止信号状态：火把/红石块点亮红石粉，火把收到输入信号则熄灭
+  let changed = true, iter = 0;
+  while (changed && iter < 50) {
+    changed = false; iter++;
+    for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) G.signals[x][y] = 0;
+    for (let x = 0; x < G.cols; x++) {
+      for (let y = 0; y < G.rows; y++) {
+        let cell = G.grid[x][y];
+        if (cell.type === T.TORCH && !cell.extinguished) G.signals[x][y] = 15;
+        else if (cell.type === T.BLOCK) G.signals[x][y] = 15;
+      }
+    }
+    let dustChanged = true, dustIter = 0;
+    while (dustChanged && dustIter < 30) {
+      dustChanged = false; dustIter++;
+      for (let x = 0; x < G.cols; x++) {
+        for (let y = 0; y < G.rows; y++) {
+          if (G.grid[x][y].type === T.DUST) {
+            let mx = 0;
+            for (let i = 0; i < 4; i++) {
+              let d = DIRECTIONS[i];
+              let nx = x + d.dx, ny = y + d.dy;
+              if (nx < 0 || nx >= G.cols || ny < 0 || ny >= G.rows) continue;
+              let s = getNeighborSignal(nx, ny, x, y);
+              if (s > mx) mx = s;
+            }
+            let newVal = mx > 0 ? mx - 1 : 0;
+            if (newVal !== G.signals[x][y]) { G.signals[x][y] = newVal; dustChanged = true; }
+          }
+        }
+      }
+    }
+    for (let x = 0; x < G.cols; x++) {
+      for (let y = 0; y < G.rows; y++) {
+        let cell = G.grid[x][y];
+        if (cell.type === T.TORCH) {
+          let d = DIRECTIONS[cell.direction];
+          let shouldExtinguish = getInputSignal(x, y, d) > 0;
+          if (shouldExtinguish !== cell.extinguished) { cell.extinguished = shouldExtinguish; changed = true; }
+        }
+      }
+    }
+  }
+}
 function resetSimulation() {
   pauseSimulation(); G.tick = 0; G.inputActive = false; G.inputRemaining = 0;
   for (let s of G.inputStates) { s.remaining = 0; s.active = false; s.delay = 0; }
-  G.outputPowered = false; G.outputArrivalTick = -1; G.outputDepartureTick = -1; G.outputDelay = -1; G.outputDuration = 0; G.outputMaxStrength = 0; G.animFrame = 0;
+  G.outputPowered = false; G.outputArrivalTick = -1; G.outputDepartureTick = -1; G.outputDelay = -1; G.outputDuration = 0; G.outputMaxStrength = 0; G.pulseChecked = false; G.won = false; G.animFrame = 0;
   for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { G.signals[x][y] = 0; let c = G.grid[x][y]; c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0; }
-  render(); updateInfoBar();
+  if (!G.validating) initRestingSignals();
+  if (!G.validating) { render(); updateInfoBar(); }
 }
 function stepSimulation() {
   if (G.tick === 0) {
@@ -1852,7 +2044,7 @@ canvas.addEventListener('click', (e) => {
         if (cell.type === T.REPEATER) cell.delay = (cell.delay % 4) + 1;
         else if (cell.type === T.COMPARATOR) cell.mode = cell.mode === 'compare' ? 'subtract' : 'compare';
         else cell.direction = (cell.direction + 1) % 4;
-        playClick(); render();
+        playClick(); resetSimulation(); updateInfoBar(); render();
         if (cell.direction !== oldDir || cell.delay !== oldDelay || cell.mode !== oldMode) {
           sendToPeer({ t: 'modify', x: gx, y: gy, comp: cell.type, dir: cell.direction, delay: cell.delay, mode: cell.mode });
         }
@@ -2050,6 +2242,9 @@ document.getElementById('homeStartBtn').onclick = () => {
   if (G.completed.size >= LEVELS.length) nextLevel = 0;
   loadLevel(nextLevel);
 };
+// 生成随机关卡并加入LEVELS（在G初始化后）
+LEVELS.push(generateRandomLevel());
+
 init();
 </script>
 </body>
