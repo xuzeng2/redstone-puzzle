@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>红石逻辑解谜 · 更新日志</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #0d1117;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            width: 100%;
+            background: #16213e;
+            border-radius: 16px;
+            border: 2px solid #0f3460;
+            padding: 2rem 2rem 2.5rem;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #e94560, #4ecca3, #e94560);
+            background-size: 200% 100%;
+            animation: shimmer 3s infinite linear;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        /* 头部 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 2rem;
+            border-bottom: 2px solid #0f3460;
+            padding-bottom: 1rem;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            background: linear-gradient(135deg, #e94560, #4ecca3);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header .badge {
+            background: #0f3460;
+            padding: 6px 16px;
+            border-radius: 40px;
+            border: 1px solid #4ecca3;
+            color: #4ecca3;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 1px;
+        }
+
+        /* 版本时间线 */
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 2rem;
+        }
+
+        .version-block {
+            background: #1a1a2e;
+            border-radius: 12px;
+            border-left: 4px solid #e94560;
+            padding: 1.5rem 1.8rem;
+            transition: border-color 0.3s, transform 0.2s;
+        }
+
+        .version-block:hover {
+            border-left-color: #4ecca3;
+            transform: translateX(4px);
+        }
+
+        .version-block .version-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 12px 20px;
+            margin-bottom: 12px;
+        }
+
+        .version-block .version-tag {
+            font-size: 22px;
+            font-weight: 700;
+            color: #e94560;
+            letter-spacing: 0.5px;
+        }
+
+        .version-block .version-date {
+            font-size: 14px;
+            color: #888;
+            background: #0d1117;
+            padding: 2px 14px;
+            border-radius: 20px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .version-block .version-badge {
+            font-size: 12px;
+            background: #0f3460;
+            color: #4ecca3;
+            padding: 2px 14px;
+            border-radius: 40px;
+            border: 1px solid #4ecca3;
+            font-weight: 600;
+            margin-left: auto;
+        }
+
+        .version-block .version-badge.fix {
+            background: #3a1a2e;
+            border-color: #e94560;
+            color: #e94560;
+        }
+
+        .version-block .version-badge.feature {
+            background: #0f3460;
+            border-color: #4ecca3;
+            color: #4ecca3;
+        }
+
+        .version-block .version-badge.breaking {
+            background: #5a1a1a;
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+
+        .version-block .changes {
+            list-style: none;
+            padding: 0;
+            margin: 12px 0 0 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .version-block .changes li {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #d0d0d0;
+            padding-left: 4px;
+        }
+
+        .version-block .changes li .emoji {
+            flex-shrink: 0;
+            font-size: 18px;
+            width: 26px;
+            text-align: center;
+            color: #4ecca3;
+        }
+
+        .version-block .changes li .emoji.fix {
+            color: #e94560;
+        }
+
+        .version-block .changes li .emoji.breaking {
+            color: #ff6b6b;
+        }
+
+        .version-block .changes li strong {
+            color: #e0e0e0;
+            font-weight: 600;
+        }
+
+        .version-block .changes li code {
+            background: #0d1117;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #4ecca3;
+            border: 1px solid #2a2a4a;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        }
+
+        .version-block .changes li .tag {
+            display: inline-block;
+            background: #0f3460;
+            color: #4ecca3;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 0 10px;
+            border-radius: 40px;
+            border: 1px solid #2a4a6a;
+            margin-right: 6px;
+        }
+
+        .version-block .changes li .tag.fix {
+            background: #3a1a2e;
+            border-color: #6a2a3a;
+            color: #e94560;
+        }
+
+        .version-block .changes li .tag.breaking {
+            background: #4a1a1a;
+            border-color: #7a2a2a;
+            color: #ff6b6b;
+        }
+
+        .version-block .changes li .tag.feature {
+            background: #0f3460;
+            border-color: #2a6a6a;
+            color: #4ecca3;
+        }
+
+        /* 小屏适配 */
+        @media (max-width: 640px) {
+            .container {
+                padding: 1.2rem;
+            }
+            .header h1 {
+                font-size: 22px;
+            }
+            .version-block {
+                padding: 1rem 1.2rem;
+            }
+            .version-block .version-tag {
+                font-size: 18px;
+            }
+            .version-block .changes li {
+                font-size: 14px;
+            }
+            .version-block .version-badge {
+                font-size: 10px;
+                padding: 0 10px;
+            }
+        }
+
+        /* 页脚 */
+        .footer {
+            margin-top: 2.5rem;
+            color: #555;
+            font-size: 13px;
+            border-top: 1px solid #1a2333;
+            padding-top: 1.5rem;
+            text-align: center;
+            letter-spacing: 0.5px;
+        }
+
+        .footer a {
+            color: #4ecca3;
+            text-decoration: none;
+            border-bottom: 1px dashed #2a4a6a;
+        }
+
+        .footer a:hover {
+            color: #e94560;
+            border-bottom-color: #e94560;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 1.2rem;
+            padding: 8px 24px;
+            border: 2px solid #0f3460;
+            border-radius: 40px;
+            color: #aaa;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.25s;
+            font-size: 14px;
+        }
+
+        .back-link:hover {
+            border-color: #e94560;
+            color: #e94560;
+            background: rgba(233, 69, 96, 0.06);
+        }
+
+        /* 版本间分隔装饰 */
+        .timeline-divider {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #2a3a5a;
+            font-size: 12px;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin: -0.5rem 0;
+        }
+
+        .timeline-divider::before,
+        .timeline-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #2a3a5a, transparent);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <div class="header">
+            <h1>⚡ 红石逻辑解谜 · 更新日志</h1>
+            <span class="badge">v2.0 正式版</span>
+        </div>
+
+        <!-- 时间线 -->
+        <div class="timeline">
+            <!-- v2.5.0 -->
+            <div class="version-block">
+                <div class="version-header">
+                    <span class="version-tag">v2.5.0</span>
+                    <span class="version-date">2026-08-7</span>
+                    <span class="version-badge feature">🧩 逻辑门扩展</span>
+                </div>
+                <ul class="changes">
+                    <li>
+                        <span class="emoji fix">🐛</span>
+                        <span><strong>增加</strong> — 增加了大量屎山代码，成功的让代码量来到了，6000+</span>
+                    </li>
+                </ul>
+            </div>
+            <!-- v2.0.0 -->
+            <div class="version-block">
+                <div class="version-header">
+                    <span class="version-tag">v2.0.0</span>
+                    <span class="version-date">2026-08-08</span>
+                    <span class="version-badge feature">🎯 重大更新</span>
+                </div>
+                <ul class="changes">
+                    <li>
+                        <span class="emoji feature">✨</span>
+                        <span><strong>联机协作模式</strong> — 双人实时协作，左右分区各自负责，通过 <code>simple-peer</code> P2P 连接</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">🗣️</span>
+                        <span><strong>语音消息</strong> — 内置麦克风录音，发送 60 秒语音，队友点击即可播放</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">💬</span>
+                        <span><strong>实时聊天</strong> — 联机状态下文字聊天，消息即时同步</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">🔄</span>
+                        <span><strong>全状态同步</strong> — 元件放置/移除/修改、关卡切换、模拟控制（播放/暂停/单步/重置）全部同步</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">🎨</span>
+                        <span><strong>UI 焕新</strong> — 联机状态指示、分界线高亮、队友光标，协作体验更直观</span>
+                    </li>
+                    <li>
+                        <span class="emoji fix">🐛</span>
+                        <span><strong>修复</strong> — 红石粉信号传播冷却逻辑，避免幽灵信号</span>
+                    </li>
+                    <li>
+                        <span class="emoji breaking">⚠️</span>
+                        <span><strong>破坏性变更</strong> — 存档版本升级至 v2，旧存档不兼容（自动重置 <code>rs_completed</code>）</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="timeline-divider">—— 迭代 ——</div>
+
+            <!-- v1.5.0 -->
+            <div class="version-block">
+                <div class="version-header">
+                    <span class="version-tag">v1.5.0</span>
+                    <span class="version-date">2026-08-7</span>
+                    <span class="version-badge feature">🧩 逻辑门扩展</span>
+                </div>
+                <ul class="changes">
+                    <li>
+                        <span class="emoji feature">➕</span>
+                        <span><strong>新增关卡</strong> — “信号衰减”、“减法”、“异或门”、“时钟”，覆盖更多红石逻辑</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">📖</span>
+                        <span><strong>逻辑门介绍</strong> — 首次遇到 NOT / OR / AND 门时弹出图文教程</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">🎯</span>
+                        <span><strong>目标强度</strong> — 关卡可配置目标信号强度，增加挑战维度</span>
+                    </li>
+                    <li>
+                        <span class="emoji fix">🐛</span>
+                        <span><strong>修复</strong> — 比较器减法模式在侧输入为 0 时输出正确</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- v1.3.0 -->
+            <div class="version-block">
+                <div class="version-header">
+                    <span class="version-tag">v1.3.0</span>
+                    <span class="version-date">2026-08-7</span>
+                    <span class="version-badge feature">🎨 编辑器增强</span>
+                </div>
+                <ul class="changes">
+                    <li>
+                        <span class="emoji feature">🖱️</span>
+                        <span><strong>拖拽放置</strong> — 按住左键拖拽可连续放置元件</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">🔢</span>
+                        <span><strong>元件计数</strong> — 元件按钮上显示剩余可用数量</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">💾</span>
+                        <span><strong>存档增强</strong> — 保存/读取关卡布局、通关进度、元件介绍状态</span>
+                    </li>
+                    <li>
+                        <span class="emoji fix">🐛</span>
+                        <span><strong>修复</strong> — 中继器档位切换后信号延迟计算正确</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- v1.1.0 -->
+            <div class="version-block">
+                <div class="version-header">
+                    <span class="version-tag">v1.1.0</span>
+                    <span class="version-date">2026-8-6</span>
+                    <span class="version-badge feature">📦 关卡设计器</span>
+                </div>
+                <ul class="changes">
+                    <li>
+                        <span class="emoji feature">⚙️</span>
+                        <span><strong>内置关卡设计器</strong> — 可视化设计、导出/导入 JSON 关卡包</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">📋</span>
+                        <span><strong>多输入配置</strong> — 支持 2~4 个输入点，独立配置延迟和强度</span>
+                    </li>
+                    <li>
+                        <span class="emoji feature">🔒</span>
+                        <span><strong>元件限制</strong> — 每个关卡可单独限制元件数量</span>
+                    </li>
+                    <li>
+                        <span class="emoji fix">🐛</span>
+                        <span><strong>修复</strong> — 侦测器脉冲触发条件优化，避免误触发</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- v1.0.0 -->
+            <div class="version-block">
+                <div class="version-header">
+                    <span class="version-tag">v1.0.0</span>
+                    <span class="version-date">2026-8-6</span>
+                    <span class="version-badge">🚀 首发</span>
+                </div>
+                <ul class="changes">
+                    <li>
+                        <span class="emoji">🎉</span>
+                        <span><strong>首发版本</strong> — 包含 7 个基础关卡，涵盖红石粉、中继器、侦测器、火把</span>
+                    </li>
+                    <li>
+                        <span class="emoji">🎵</span>
+                        <span><strong>音效系统</strong> — 放置/移除/旋转/通关均有反馈音效</span>
+                    </li>
+                    <li>
+                        <span class="emoji">📱</span>
+                        <span><strong>响应式设计</strong> — 适配桌面与移动端操作</span>
+                    </li>
+                    <li>
+                        <span class="emoji">💡</span>
+                        <span><strong>元件教程</strong> — 首次解锁新元件时弹出图文介绍</span>
+                    </li>
+                </ul>
+            </div>
+
+        </div>
+
+        <!-- 页脚 -->
+        <div class="footer">
+            <span>红石逻辑解谜 · 持续迭代中</span><br>
+            <span style="font-size: 12px; color: #444;">由 <a href="#" onclick="alert('感谢你的支持！')">红石实验室</a> 制作 · 欢迎反馈</span>
+            <br>
+            <a href="#" class="back-link" onclick="alert('返回游戏主页（实际项目中可跳转）')">← 返回游戏</a>
+        </div>
+    </div>
+</body>
+</html>
