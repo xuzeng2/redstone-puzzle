@@ -47,7 +47,7 @@
   inputs      多输入数组 [{x, y, duration, strength, delay}] (多输入关卡必填, 与input二选一)
   output      输出点 {x, y} (必填)
   target      目标 {delay, duration} (必填)
-  components  可用元件列表 (必填), 可选值: dust/block/torch/repeater/comparator/observer
+  components  可用元件列表 (必填), 可选值: dust/block/torch/repeater/comparator/observer/stone/piston
   limits      元件数量限制 {元件类型: 数量} (可选)
   hint        通关提示 (必填)
   par         推荐元件数 (可选, 默认10)
@@ -274,6 +274,12 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
     box-shadow:0 0 20px rgba(233,69,96,.4); transition:all .2s;
   }
   #homePage .home-start:hover { background:#ff5570; box-shadow:0 0 30px rgba(233,69,96,.6); transform:scale(1.05); }
+  #homePage .home-free {
+    padding:12px 36px; font-size:16px; border:2px solid #4ecca3; background:transparent;
+    color:#4ecca3; cursor:pointer; border-radius:8px; letter-spacing:2px; margin-top:16px;
+    transition:all .2s;
+  }
+  #homePage .home-free:hover { background:#4ecca3; color:#0d1117; box-shadow:0 0 20px rgba(78,204,163,.5); transform:scale(1.05); }
   /* 联机弹窗 */
   #onlineModal {
     display:none; position:fixed; top:0; left:0; width:100%; height:100%;
@@ -426,6 +432,7 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
   <div class="home-progress-bar"><div class="home-progress-fill" id="homeProgressFill" style="width:0%"></div></div>
   <div class="home-levels" id="homeLevels"></div>
   <button class="home-start" id="homeStartBtn">开始游戏</button>
+  <button class="home-free" id="homeFreeBtn">自由模式</button>
 </div>
 
 <div id="header">
@@ -822,7 +829,9 @@ function syncFullState() {
   for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
     let c = G.grid[x][y];
     if (c.type === T.EMPTY || c.type === T.INPUT || c.type === T.OUTPUT) continue;
-    layout.push({ x, y, type: c.type, direction: c.direction, delay: c.delay, mode: c.mode });
+    let item = { x, y, type: c.type, direction: c.direction, delay: c.delay, mode: c.mode };
+    if (c.type === T.LEVER) item.leverOn = c.leverOn;
+    layout.push(item);
   }
   sendToPeer({ t: 'fullSync', levelIdx: G.levelIdx, layout: layout });
 }
@@ -854,6 +863,8 @@ function onPeerData(data) {
         c.type = msg.comp; c.direction = msg.dir; c.delay = msg.delay || 1; c.mode = msg.mode || 'compare';
         c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false;
         c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0;
+        c.extended=false; c.pushedBlockType=null; c.pistonCooldown=0;
+        c.buttonActive=false; c.buttonTimer=0; c.leverOn=false;
         G.compCounts[msg.comp] = (G.compCounts[msg.comp] || 0) + 1;
         resetSimulation(); updateInfoBar(); render();
       }
@@ -862,6 +873,7 @@ function onPeerData(data) {
     case 'remove': {
       let c = G.grid[msg.x][msg.y];
       if (c.type !== T.EMPTY && c.type !== T.INPUT && c.type !== T.OUTPUT) {
+        retractAllPistons();
         G.compCounts[c.type] = Math.max(0, (G.compCounts[c.type] || 1) - 1);
         c.type = T.EMPTY; c.direction = 0; c.delay = 1;
         resetSimulation(); updateInfoBar(); render();
@@ -871,6 +883,7 @@ function onPeerData(data) {
     case 'modify': {
       let c = G.grid[msg.x][msg.y];
       if (c.type === msg.comp) {
+        retractAllPistons();
         if (msg.dir !== undefined) c.direction = msg.dir;
         if (msg.delay !== undefined) c.delay = msg.delay;
         if (msg.mode !== undefined) c.mode = msg.mode;
@@ -912,6 +925,7 @@ function onPeerData(data) {
           c.delay = item.delay || 1; c.mode = item.mode || 'compare';
           c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false;
           c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0;
+          c.buttonActive=false; c.buttonTimer=0; c.leverOn=item.leverOn||false;
           G.compCounts[item.type] = (G.compCounts[item.type] || 0) + 1;
         }
       }
@@ -923,6 +937,24 @@ function onPeerData(data) {
     }
     case 'cursor': { MP.remoteCursor = { x: msg.x, y: msg.y }; render(); break; }
     case 'chat': { addChatMessage(msg.text, 'other'); break; }
+    case 'buttonActivate': {
+      let c = G.grid[msg.x][msg.y];
+      if (c.type === T.BUTTON) {
+        c.buttonActive = true; c.buttonTimer = 5;
+        if (!G.running) { initRestingSignals(); startButtonRestTimer(); render(); }
+        else render();
+      }
+      break;
+    }
+    case 'leverToggle': {
+      let c = G.grid[msg.x][msg.y];
+      if (c.type === T.LEVER) {
+        c.leverOn = msg.on;
+        if (!G.running) { initRestingSignals(); render(); }
+        else render();
+      }
+      break;
+    }
   }
   MP.syncing = false;
 }
@@ -1179,12 +1211,14 @@ const DIRECTIONS = [
 const T = {
   EMPTY: 'empty', DUST: 'dust', BLOCK: 'block', TORCH: 'torch',
   REPEATER: 'repeater', COMPARATOR: 'comparator', OBSERVER: 'observer',
-  INPUT: 'input', OUTPUT: 'output',
+  INPUT: 'input', OUTPUT: 'output', STONE: 'stone', PISTON: 'piston', LAMP: 'lamp',
+  BUTTON: 'button', LEVER: 'lever',
 };
 
 const COMP_NAMES = {
   dust: '红石粉', block: '红石块', torch: '红石火把',
-  repeater: '中继器', comparator: '比较器', observer: '侦测器',
+  repeater: '中继器', comparator: '比较器', observer: '侦测器', stone: '石头', piston: '粘性活塞', lamp: '红石灯',
+  button: '按钮', lever: '拉杆',
 };
 
 const COMP_INTROS = {
@@ -1213,10 +1247,35 @@ const COMP_INTROS = {
     desc: '<b>永久信号源</b>。红石块始终输出满强度信号（15点），无需任何输入即可供电。可作为常亮电源使用，也能传导信号。',
     tip: '无需输入，始终输出信号强度15',
   },
+  stone: {
+    title: '石头',
+    desc: '<b>可充能方块</b>。石头本身不产生信号，但当<b>中继器正面朝向石头</b>时，石头被充能为信号强度15。充能后的石头可以给相邻的红石粉、中继器（输入端朝向石头）、比较器（输入端朝向石头）提供信号。',
+    tip: '将中继器正面（输出端）对准石头即可充能，石头向所有相邻方向输出信号',
+  },
+  piston: {
+    title: '粘性活塞',
+    desc: '<b>可推拉方块的机械元件</b>。当活塞<b>任意相邻方向有信号</b>时，活塞伸出，将正前方的<b>石头或红石块</b>向前推一格；信号消失时活塞缩回，将方块<b>拉回</b>原位。活塞本身不导电也不产生信号，但被推拉的方块在新位置会正常工作。',
+    tip: '活塞正面朝向要推的方块，给活塞相邻的任意红石粉供电即可激活。按R键旋转方向',
+  },
   comparator: {
     title: '比较器',
     desc: '<b>信号处理</b>元件。背面为主输入，左右两侧为侧输入。<b>比较模式</b>：主输入≥侧输入时直通信号；<b>减法模式</b>：输出 = 主输入 - 侧输入。点击可切换模式，按R键旋转方向。',
     tip: '三角尖端为输出方向，背面为主输入。点击切换比较/减法模式',
+  },
+  lamp: {
+    title: '红石灯',
+    desc: '<b>信号指示灯</b>。当任意相邻方向有红石信号时，灯泡<b>亮起</b>发出橙色光芒；信号消失时熄灭。红石灯不导电也不产生信号，仅用于<b>可视化信号状态</b>。',
+    tip: '放在红石粉旁边即可，有信号就亮，无信号就灭',
+  },
+  button: {
+    title: '按钮',
+    desc: '<b>瞬时信号源</b>。点击按钮后，它会输出<b>强度15</b>的信号，持续<b>5tick</b>后自动关闭。按钮向所有相邻方向输出信号，适合触发短脉冲。',
+    tip: '点击已放置的按钮即可激活，信号持续5tick后自动消失',
+  },
+  lever: {
+    title: '拉杆',
+    desc: '<b>持久信号源</b>。拉杆有<b>开启</b>和<b>关闭</b>两种状态。开启时持续输出<b>强度15</b>的信号，关闭时不输出。点击拉杆可切换状态。',
+    tip: '点击已放置的拉杆切换开/关，开启时持续输出信号',
   },
 };
 
@@ -1226,7 +1285,7 @@ const COMP_INTROS = {
 const LEVELS = __LEVELS_PLACEHOLDER__;
 
 // ============================================================
-//  随机关卡生成（第18关）
+//  随机关卡生成（第19关）
 // ============================================================
 function generateRandomLevel() {
   for (let attempt = 0; attempt < 50; attempt++) {
@@ -1387,7 +1446,7 @@ let G = {
     }
     return JSON.parse(localStorage.getItem('rs_completed') || '[]');
   })()),
-  compCounts: {}, animFrame: 0,
+  compCounts: {}, animFrame: 0, pistonAnimRequested: false,
   inputStates: [], logicResult: null, levelLayouts: {},
 };
 
@@ -1400,7 +1459,9 @@ function initGrid(level) {
       G.grid[x][y] = { type: T.EMPTY, direction: 0, delay: 1, mode: 'compare',
         outputActive: false, prevInput: false, eventQueue: [],
         extinguished: false, pulsing: false, pulseTimer: 0,
-        prevFrontSignal: 0, outputStrength: 0, cooldown: 0 };
+        prevFrontSignal: 0, outputStrength: 0, cooldown: 0,
+        extended: false, pushedBlockType: null, pistonCooldown: 0, pistonAnim: 0,
+        buttonActive: false, buttonTimer: 0, leverOn: false };
       G.signals[x][y] = 0;
     }
   }
@@ -1413,7 +1474,7 @@ function initGrid(level) {
     }));
     for (let s of G.inputStates) G.grid[s.x][s.y].type = T.INPUT;
   } else { G.inputStates = []; }
-  G.grid[level.output.x][level.output.y].type = T.OUTPUT;
+  if (level.output) { G.grid[level.output.x][level.output.y].type = T.OUTPUT; }
   if (level.preplaced) {
     for (let p of level.preplaced) {
       let c = G.grid[p.x][p.y]; c.type = p.type;
@@ -1427,8 +1488,8 @@ function initGrid(level) {
   resetSimulation();
 }
 
-function isSignalSource(cell) { return [T.BLOCK,T.TORCH,T.REPEATER,T.COMPARATOR,T.OBSERVER,T.INPUT].includes(cell.type); }
-function isConductive(cell) { return [T.DUST,T.BLOCK,T.TORCH,T.REPEATER,T.COMPARATOR,T.OBSERVER,T.INPUT].includes(cell.type); }
+function isSignalSource(cell) { return [T.BLOCK,T.TORCH,T.REPEATER,T.COMPARATOR,T.OBSERVER,T.INPUT,T.STONE,T.BUTTON,T.LEVER].includes(cell.type); }
+function isConductive(cell) { return [T.DUST,T.BLOCK,T.TORCH,T.REPEATER,T.COMPARATOR,T.OBSERVER,T.INPUT,T.STONE,T.BUTTON,T.LEVER].includes(cell.type); }
 function isDirectionalSource(cell) { return [T.REPEATER,T.COMPARATOR,T.OBSERVER,T.TORCH].includes(cell.type); }
 function getOutputDir(cell) { let d=DIRECTIONS[cell.direction]; return cell.type===T.OBSERVER?{dx:-d.dx,dy:-d.dy}:d; }
 function getNeighborSignal(nx,ny,x,y) { let n=G.grid[nx][ny]; if(!isConductive(n))return 0; if(isDirectionalSource(n)){let o=getOutputDir(n); if(nx+o.dx!==x||ny+o.dy!==y)return 0;} return G.signals[nx][ny]; }
@@ -1441,6 +1502,9 @@ function getOutputPower(cell,x,y) {
     case T.REPEATER: return cell.outputActive?15:0;
     case T.COMPARATOR: return cell.outputActive?(cell.outputStrength||0):0;
     case T.OBSERVER: return cell.pulsing?15:0;
+    case T.STONE: { let p=0; for(let i=0;i<4;i++){let d=DIRECTIONS[i]; let nx=x+d.dx,ny=y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; let n=G.grid[nx][ny]; if(n.type===T.REPEATER){let o=getOutputDir(n); if(nx+o.dx===x&&ny+o.dy===y){let s=G.signals[nx][ny]; if(s>p)p=s;}}} return p; }
+    case T.BUTTON: return cell.buttonActive ? 15 : 0;
+    case T.LEVER: return cell.leverOn ? 15 : 0;
     default: return 0;
   }
 }
@@ -1465,6 +1529,37 @@ function tickUpdate() {
       case T.TORCH: { let d=DIRECTIONS[cell.direction]; cell.extinguished=getInputSignal(x,y,d)>0; break; }
       case T.COMPARATOR: { let d=DIRECTIONS[cell.direction]; let mp=getInputSignal(x,y,d); let sp=0; let ps=[{dx:d.dy,dy:d.dx},{dx:-d.dy,dy:-d.dx}]; for(let p of ps){let sx=x+p.dx,sy=y+p.dy; if(sx>=0&&sx<G.cols&&sy>=0&&sy<G.rows){let ns=getNeighborSignal(sx,sy,x,y); if(ns>sp)sp=ns;}} if(cell.mode==='compare'){if(mp>=sp&&mp>0){cell.outputActive=true;cell.outputStrength=mp;}else{cell.outputActive=false;cell.outputStrength=0;}}else{let r=Math.max(0,mp-sp);cell.outputActive=r>0;cell.outputStrength=r;} break; }
       case T.OBSERVER: { let d=DIRECTIONS[cell.direction]; let fx=x+d.dx,fy=y+d.dy; let fs=0; if(fx>=0&&fx<G.cols&&fy>=0&&fy<G.rows)fs=G.signals[fx][fy]||0; if(fs>0&&cell.prevFrontSignal===0){cell.pulsing=true;cell.pulseTimer=2;}else if(cell.pulseTimer>0){cell.pulseTimer--;if(cell.pulseTimer<=0)cell.pulsing=false;} cell.prevFrontSignal=fs; break; }
+      case T.BUTTON: { if(cell.buttonActive){cell.buttonTimer--; if(cell.buttonTimer<=0)cell.buttonActive=false;} break; }
+    }
+  }
+  // 粘性活塞推拉逻辑
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+    let cell = G.grid[x][y];
+    if (cell.type !== T.PISTON) continue;
+    if (cell.pistonCooldown > 0) { cell.pistonCooldown--; continue; }
+    let dir = DIRECTIONS[cell.direction];
+    let fx = x + dir.dx, fy = y + dir.dy;
+    let bx = fx + dir.dx, by = fy + dir.dy;
+    if (fx < 0 || fx >= G.cols || fy < 0 || fy >= G.rows) continue;
+    if (bx < 0 || bx >= G.cols || by < 0 || by >= G.rows) continue;
+    let powered = false;
+    for (let i = 0; i < 4; i++) { if (i === cell.direction) continue; let d = DIRECTIONS[i]; let nx = x + d.dx, ny = y + d.dy; if (nx < 0 || nx >= G.cols || ny < 0 || ny >= G.rows) continue; if (G.signals[nx][ny] > 0) { powered = true; break; } }
+    let frontCell = G.grid[fx][fy];
+    let beyondCell = G.grid[bx][by];
+    if (powered && !cell.extended) {
+      if ((frontCell.type === T.STONE || frontCell.type === T.BLOCK) && beyondCell.type === T.EMPTY) {
+        beyondCell.type = frontCell.type; beyondCell.direction = frontCell.direction; beyondCell.delay = frontCell.delay; beyondCell.mode = frontCell.mode;
+        beyondCell.outputActive=false; beyondCell.prevInput=false; beyondCell.eventQueue=[]; beyondCell.extinguished=false; beyondCell.pulsing=false; beyondCell.pulseTimer=0; beyondCell.prevFrontSignal=0; beyondCell.outputStrength=0; beyondCell.cooldown=0; beyondCell.extended=false; beyondCell.pushedBlockType=null;
+        frontCell.type = T.EMPTY; frontCell.direction = 0; frontCell.delay = 1; frontCell.mode = 'compare';
+        cell.extended = true; cell.pushedBlockType = beyondCell.type; cell.pistonCooldown = 2;
+      }
+    } else if (!powered && cell.extended) {
+      if (frontCell.type === T.EMPTY && beyondCell.type === cell.pushedBlockType) {
+        frontCell.type = beyondCell.type; frontCell.direction = beyondCell.direction; frontCell.delay = beyondCell.delay; frontCell.mode = beyondCell.mode;
+        frontCell.outputActive=false; frontCell.prevInput=false; frontCell.eventQueue=[]; frontCell.extinguished=false; frontCell.pulsing=false; frontCell.pulseTimer=0; frontCell.prevFrontSignal=0; frontCell.outputStrength=0; frontCell.cooldown=0; frontCell.extended=false; frontCell.pushedBlockType=null;
+        beyondCell.type = T.EMPTY; beyondCell.direction = 0; beyondCell.delay = 1; beyondCell.mode = 'compare';
+        cell.extended = false; cell.pushedBlockType = null; cell.pistonCooldown = 2;
+      }
     }
   }
   let newSig = [];
@@ -1494,9 +1589,15 @@ function tickUpdate() {
   let hasActiveSignal = false;
   for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { if (newSig[x][y] > 0) { hasActiveSignal = true; break; } }
   if (hasActiveSignal && !G.validating) playSignal();
-  checkOutput();
+  if (G.level.output) checkOutput();
   if (!G.validating) updateInfoBar();
   G.tick++;
+  if (G.level.freeMode) {
+    let anySignal = false, anyEvent = false;
+    for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { if (G.signals[x][y] > 0) anySignal = true; if (G.grid[x][y].eventQueue && G.grid[x][y].eventQueue.length > 0) anyEvent = true; }
+    if (!anySignal && !anyEvent && G.tick > 10) endSimulation();
+    return;
+  }
   let maxDuration = G.inputStates.length > 0 ? Math.max(...G.inputStates.map(s => (s.origDelay||0) + s.duration)) : G.level.input.duration;
   if (!G.inputActive && G.tick > maxDuration + 10) {
     let anySignal = false, anyEvent = false;
@@ -1509,6 +1610,7 @@ function tickUpdate() {
 function endSimulation() {
   pauseSimulation();
   if (G.validating) return;
+  if (G.level.freeMode) return;
   if (!G.won) showFailModal();
 }
 
@@ -1538,42 +1640,106 @@ function startSimulation() {
   if (G.running) return;
   if (G.tick === 0) {
     if (G.inputStates.length > 0) { for (let s of G.inputStates) { s.remaining = s.duration; s.delay = s.origDelay; s.active = false; } }
-    else { G.inputRemaining = G.level.input.duration; }
+    else if (G.level.input) { G.inputRemaining = G.level.input.duration; }
   }
   G.running = true;
   document.getElementById('playBtn').textContent = '\u23F8 暂停';
   G.timer = setInterval(() => { tickUpdate(); render(); }, TICK_MS);
 }
 function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.timer); G.timer = null; } if (!G.validating) document.getElementById('playBtn').textContent = '\u25B6 播放'; }
+
+// 静止状态下按钮实时倒计时
+let buttonRestTimer = null;
+function startButtonRestTimer() {
+  if (buttonRestTimer) return;
+  buttonRestTimer = setInterval(() => {
+    let anyActive = false;
+    for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+      let c = G.grid[x][y];
+      if (c.type === T.BUTTON && c.buttonActive) {
+        c.buttonTimer--;
+        if (c.buttonTimer <= 0) c.buttonActive = false;
+        else anyActive = true;
+      }
+    }
+    if (!anyActive) { clearInterval(buttonRestTimer); buttonRestTimer = null; }
+    if (!G.running) { initRestingSignals(); render(); }
+  }, TICK_MS);
+}
 function initRestingSignals() {
-  // 迭代计算静止信号状态：火把/红石块点亮红石粉，火把收到输入信号则熄灭
+  // 迭代计算静止信号状态：火把/红石块/中继器/比较器/石头点亮红石粉，火把收到输入信号则熄灭
   let changed = true, iter = 0;
   while (changed && iter < 50) {
     changed = false; iter++;
     for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) G.signals[x][y] = 0;
+    // 设置信号源（含中继器、比较器、石头）
     for (let x = 0; x < G.cols; x++) {
       for (let y = 0; y < G.rows; y++) {
         let cell = G.grid[x][y];
         if (cell.type === T.TORCH && !cell.extinguished) G.signals[x][y] = 15;
         else if (cell.type === T.BLOCK) G.signals[x][y] = 15;
+        else if (cell.type === T.REPEATER) {
+          let d=DIRECTIONS[cell.direction]; let ip=getInputSignal(x,y,d)>0;
+          cell.outputActive=ip; cell.prevInput=ip;
+          if(ip) G.signals[x][y]=15;
+        }
+        else if (cell.type === T.COMPARATOR) {
+          let d=DIRECTIONS[cell.direction]; let mp=getInputSignal(x,y,d); let sp=0;
+          let ps=[{dx:d.dy,dy:d.dx},{dx:-d.dy,dy:-d.dx}];
+          for(let p of ps){let sx=x+p.dx,sy=y+p.dy; if(sx>=0&&sx<G.cols&&sy>=0&&sy<G.rows){let ns=getNeighborSignal(sx,sy,x,y); if(ns>sp)sp=ns;}}
+          if(cell.mode==='compare'){if(mp>=sp&&mp>0){cell.outputActive=true;cell.outputStrength=mp;G.signals[x][y]=mp;}else{cell.outputActive=false;cell.outputStrength=0;}}
+          else{let r=Math.max(0,mp-sp);cell.outputActive=r>0;cell.outputStrength=r;if(r>0)G.signals[x][y]=r;}
+        }
+        else if (cell.type === T.STONE) {
+          let p=0; for(let i=0;i<4;i++){let d=DIRECTIONS[i]; let nx=x+d.dx,ny=y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; let n=G.grid[nx][ny]; if(n.type===T.REPEATER){let o=getOutputDir(n); if(nx+o.dx===x&&ny+o.dy===y){let s=G.signals[nx][ny]; if(s>p)p=s;}}}
+          if(p>0) G.signals[x][y]=p;
+        }
+        else if (cell.type === T.BUTTON && cell.buttonActive) G.signals[x][y] = 15;
+        else if (cell.type === T.LEVER && cell.leverOn) G.signals[x][y] = 15;
       }
     }
-    let dustChanged = true, dustIter = 0;
-    while (dustChanged && dustIter < 30) {
-      dustChanged = false; dustIter++;
+    // 红石粉传播 + 中继器/比较器/石头 交叉传播（确保中继器激活后红石粉能再次传播）
+    let innerChanged = true, innerIter = 0;
+    while (innerChanged && innerIter < 30) {
+      innerChanged = false; innerIter++;
+      let dustChanged = true, dustIter = 0;
+      while (dustChanged && dustIter < 30) {
+        dustChanged = false; dustIter++;
+        for (let x = 0; x < G.cols; x++) {
+          for (let y = 0; y < G.rows; y++) {
+            if (G.grid[x][y].type === T.DUST) {
+              let mx = 0;
+              for (let i = 0; i < 4; i++) {
+                let d = DIRECTIONS[i];
+                let nx = x + d.dx, ny = y + d.dy;
+                if (nx < 0 || nx >= G.cols || ny < 0 || ny >= G.rows) continue;
+                let s = getNeighborSignal(nx, ny, x, y);
+                if (s > mx) mx = s;
+              }
+              let newVal = mx > 0 ? mx - 1 : 0;
+              if (newVal !== G.signals[x][y]) { G.signals[x][y] = newVal; dustChanged = true; }
+            }
+          }
+        }
+      }
+      // 红石粉传播后重新检查中继器/比较器/石头
       for (let x = 0; x < G.cols; x++) {
         for (let y = 0; y < G.rows; y++) {
-          if (G.grid[x][y].type === T.DUST) {
-            let mx = 0;
-            for (let i = 0; i < 4; i++) {
-              let d = DIRECTIONS[i];
-              let nx = x + d.dx, ny = y + d.dy;
-              if (nx < 0 || nx >= G.cols || ny < 0 || ny >= G.rows) continue;
-              let s = getNeighborSignal(nx, ny, x, y);
-              if (s > mx) mx = s;
-            }
-            let newVal = mx > 0 ? mx - 1 : 0;
-            if (newVal !== G.signals[x][y]) { G.signals[x][y] = newVal; dustChanged = true; }
+          let cell = G.grid[x][y];
+          if (cell.type === T.REPEATER) {
+            let d=DIRECTIONS[cell.direction]; let ip=getInputSignal(x,y,d)>0;
+            if(ip!==cell.outputActive){cell.outputActive=ip;cell.prevInput=ip;G.signals[x][y]=ip?15:0;innerChanged=true;changed=true;}
+          }
+          else if (cell.type === T.COMPARATOR) {
+            let d=DIRECTIONS[cell.direction]; let mp=getInputSignal(x,y,d); let sp=0;
+            let ps=[{dx:d.dy,dy:d.dx},{dx:-d.dy,dy:-d.dx}];
+            for(let p of ps){let sx=x+p.dx,sy=y+p.dy; if(sx>=0&&sx<G.cols&&sy>=0&&sy<G.rows){let ns=getNeighborSignal(sx,sy,x,y); if(ns>sp)sp=ns;}}
+            let na,ns; if(cell.mode==='compare'){if(mp>=sp&&mp>0){na=true;ns=mp;}else{na=false;ns=0;}}else{let r=Math.max(0,mp-sp);na=r>0;ns=r;}
+            if(na!==cell.outputActive||ns!==cell.outputStrength){cell.outputActive=na;cell.outputStrength=ns;G.signals[x][y]=na?ns:0;innerChanged=true;changed=true;}
+          }
+          else if (cell.type === T.STONE) {
+            let p=0; for(let i=0;i<4;i++){let d=DIRECTIONS[i]; let nx=x+d.dx,ny=y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; let n=G.grid[nx][ny]; if(n.type===T.REPEATER){let o=getOutputDir(n); if(nx+o.dx===x&&ny+o.dy===y){let s=G.signals[nx][ny]; if(s>p)p=s;}}}
+            if(p!==G.signals[x][y]){G.signals[x][y]=p;innerChanged=true;changed=true;}
           }
         }
       }
@@ -1588,32 +1754,95 @@ function initRestingSignals() {
         }
       }
     }
+    // 活塞静止状态计算
+    for (let x = 0; x < G.cols; x++) {
+      for (let y = 0; y < G.rows; y++) {
+        let cell = G.grid[x][y];
+        if (cell.type !== T.PISTON) continue;
+        let dir = DIRECTIONS[cell.direction];
+        let fx = x + dir.dx, fy = y + dir.dy, bx = fx + dir.dx, by = fy + dir.dy;
+        if (fx < 0 || fx >= G.cols || fy < 0 || fy >= G.rows || bx < 0 || bx >= G.cols || by < 0 || by >= G.rows) continue;
+        let powered = false;
+        for (let i = 0; i < 4; i++) { if (i === cell.direction) continue; let d = DIRECTIONS[i]; let nx = x + d.dx, ny = y + d.dy; if (nx < 0 || nx >= G.cols || ny < 0 || ny >= G.rows) continue; if (G.signals[nx][ny] > 0) { powered = true; break; } }
+        let fc = G.grid[fx][fy], bc = G.grid[bx][by];
+        if (powered && !cell.extended) {
+          if ((fc.type === T.STONE || fc.type === T.BLOCK) && bc.type === T.EMPTY) {
+            bc.type = fc.type; bc.direction = fc.direction; bc.delay = fc.delay; bc.mode = fc.mode;
+            fc.type = T.EMPTY; fc.direction = 0; fc.delay = 1; fc.mode = 'compare';
+            cell.extended = true; cell.pushedBlockType = bc.type; changed = true;
+          }
+        } else if (!powered && cell.extended) {
+          if (fc.type === T.EMPTY && bc.type === cell.pushedBlockType) {
+            fc.type = bc.type; fc.direction = bc.direction; fc.delay = bc.delay; fc.mode = bc.mode;
+            bc.type = T.EMPTY; bc.direction = 0; bc.delay = 1; bc.mode = 'compare';
+            cell.extended = false; cell.pushedBlockType = null; changed = true;
+          }
+        }
+      }
+    }
+  }
+}
+function retractAllPistons() {
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+    let cell = G.grid[x][y];
+    if (cell.type !== T.PISTON || !cell.extended) continue;
+    let dir = DIRECTIONS[cell.direction];
+    let fx = x + dir.dx, fy = y + dir.dy, bx = fx + dir.dx, by = fy + dir.dy;
+    if (fx < 0 || fx >= G.cols || fy < 0 || fy >= G.rows || bx < 0 || bx >= G.cols || by < 0 || by >= G.rows) { cell.extended = false; cell.pushedBlockType = null; cell.pistonCooldown = 0; continue; }
+    let fc = G.grid[fx][fy], bc = G.grid[bx][by];
+    if (fc.type === T.EMPTY && bc.type === cell.pushedBlockType) {
+      fc.type = bc.type; fc.direction = bc.direction; fc.delay = bc.delay; fc.mode = bc.mode;
+      bc.type = T.EMPTY; bc.direction = 0; bc.delay = 1; bc.mode = 'compare';
+    }
+    cell.extended = false; cell.pushedBlockType = null; cell.pistonCooldown = 0; cell.pistonAnim = 0;
+  }
+}
+function maybeAnimatePistons() {
+  let animating = false;
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+    let cell = G.grid[x][y];
+    if (cell.type !== T.PISTON) continue;
+    let target = cell.extended ? 1 : 0;
+    if (Math.abs(cell.pistonAnim - target) > 0.01) {
+      cell.pistonAnim += (target - cell.pistonAnim) * 0.25;
+      animating = true;
+    } else { cell.pistonAnim = target; }
+  }
+  if (animating && !G.pistonAnimRequested) {
+    G.pistonAnimRequested = true;
+    requestAnimationFrame(() => { G.pistonAnimRequested = false; render(); });
   }
 }
 function resetSimulation() {
-  pauseSimulation(); G.tick = 0; G.inputActive = false; G.inputRemaining = 0;
+  pauseSimulation();
+  if (buttonRestTimer) { clearInterval(buttonRestTimer); buttonRestTimer = null; }
+  G.tick = 0; G.inputActive = false; G.inputRemaining = 0;
   for (let s of G.inputStates) { s.remaining = 0; s.active = false; s.delay = 0; }
   G.outputPowered = false; G.outputArrivalTick = -1; G.outputDepartureTick = -1; G.outputDelay = -1; G.outputDuration = 0; G.outputMaxStrength = 0; G.pulseChecked = false; G.won = false; G.animFrame = 0;
-  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { G.signals[x][y] = 0; let c = G.grid[x][y]; c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0; }
+  retractAllPistons();
+  for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { G.signals[x][y] = 0; let c = G.grid[x][y]; c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0; c.pistonCooldown=0; c.buttonActive=false; c.buttonTimer=0; }
   if (!G.validating) initRestingSignals();
   if (!G.validating) { render(); updateInfoBar(); }
 }
 function stepSimulation() {
   if (G.tick === 0) {
     if (G.inputStates.length > 0) { for (let s of G.inputStates) { s.remaining = s.duration; s.delay = s.origDelay; s.active = false; } }
-    else { G.inputRemaining = G.level.input.duration; }
+    else if (G.level.input) { G.inputRemaining = G.level.input.duration; }
   }
   tickUpdate(); render();
 }
 
 function captureLayout() {
+  retractAllPistons();
   let layout = [];
   for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
     let c = G.grid[x][y];
     if (c.type === T.EMPTY || c.type === T.INPUT || c.type === T.OUTPUT) continue;
-    layout.push({ x, y, type: c.type, direction: c.direction, delay: c.delay, mode: c.mode });
+    let item = { x, y, type: c.type, direction: c.direction, delay: c.delay, mode: c.mode };
+    if (c.type === T.LEVER) item.leverOn = c.leverOn;
+    layout.push(item);
   }
-  G.levelLayouts[G.levelIdx] = layout;
+  G.levelLayouts[G.level.freeMode ? 'free' : G.levelIdx] = layout;
 }
 function restoreLayout(idx) {
   let layout = G.levelLayouts[idx];
@@ -1623,7 +1852,8 @@ function restoreLayout(idx) {
     let c = G.grid[item.x][item.y];
     if (c.type === T.INPUT || c.type === T.OUTPUT) continue;
     c.type = item.type; c.direction = item.direction || 0; c.delay = item.delay || 1; c.mode = item.mode || 'compare';
-    c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0;
+    c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0; c.extended=false; c.pushedBlockType=null; c.pistonCooldown=0;
+    c.buttonActive=false; c.buttonTimer=0; c.leverOn=item.leverOn||false;
     G.compCounts[item.type] = (G.compCounts[item.type] || 0) + 1;
   }
 }
@@ -1761,6 +1991,16 @@ function buildComponentBar() {
 
 function updateInfoBar() {
   let lv = G.level;
+  if (lv.freeMode) {
+    document.getElementById('levelDesc').textContent = lv.name + ' — ' + lv.desc;
+    document.getElementById('targetDelay').textContent = '自由';
+    document.getElementById('targetDuration').textContent = '自由';
+    document.getElementById('currentDelay').textContent = '-';
+    document.getElementById('currentDuration').textContent = '-';
+    document.getElementById('targetStrengthInfo').style.display = 'none';
+    document.getElementById('currentStrengthInfo').style.display = 'none';
+    return;
+  }
   document.getElementById('levelDesc').textContent = '关卡' + (G.levelIdx+1) + ': ' + lv.name + ' — ' + lv.desc;
   document.getElementById('targetDelay').textContent = lv.target.delay + ' tick';
   document.getElementById('targetDuration').textContent = lv.target.duration + ' tick';
@@ -1843,6 +2083,7 @@ function render() {
       }
     }
   }
+  maybeAnimatePistons();
 }
 
 function drawCell(cell, x, y, signal) {
@@ -1870,6 +2111,11 @@ function drawCell(cell, x, y, signal) {
     case T.REPEATER: drawRepeater(px, py, cell); break;
     case T.COMPARATOR: drawComparator(px, py, cell); break;
     case T.OBSERVER: drawObserver(px, py, cell); break;
+    case T.STONE: drawStone(px, py, signal); break;
+    case T.PISTON: drawPiston(px, py, cell); break;
+    case T.LAMP: drawLamp(px, py, x, y); break;
+    case T.BUTTON: drawButton(px, py, cell); break;
+    case T.LEVER: drawLever(px, py, cell); break;
   }
 }
 
@@ -1984,6 +2230,118 @@ function drawObserver(px, py, cell) {
   ctx.beginPath(); ctx.arc(faceX+perp.dx*2,faceY+perp.dy*2,1.5,0,Math.PI*2); ctx.arc(faceX-perp.dx*2,faceY-perp.dy*2,1.5,0,Math.PI*2); ctx.fill();
   if(cell.pulsing){ctx.shadowColor='#ff3b3b';ctx.shadowBlur=8;let oX=cx-dir.dx*14,oY=cy-dir.dy*14;ctx.fillStyle='#ff3b3b';ctx.beginPath();ctx.arc(oX,oY,4,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
 }
+function drawStone(px, py, signal) {
+  let powered = signal > 0;
+  ctx.fillStyle = powered ? '#7a7a8a' : '#5a5a6a';
+  ctx.fillRect(px+4, py+4, CELL-8, CELL-8);
+  ctx.strokeStyle = powered ? '#aaaabb' : '#666677';
+  ctx.lineWidth = 2; ctx.strokeRect(px+4, py+4, CELL-8, CELL-8);
+  ctx.fillStyle = powered ? '#6a6a7a' : '#4a4a5a';
+  ctx.fillRect(px+8, py+8, CELL-16, CELL-16);
+  ctx.strokeStyle = '#3a3a4a'; ctx.lineWidth = 1;
+  ctx.strokeRect(px+8, py+8, CELL-16, CELL-16);
+  if (powered) { ctx.shadowColor='#aaaabb'; ctx.shadowBlur=6; ctx.strokeStyle='#bbbccc'; ctx.lineWidth=1; ctx.strokeRect(px+4, py+4, CELL-8, CELL-8); ctx.shadowBlur=0; }
+}
+function drawPiston(px, py, cell) {
+  let cx = px+CELL/2, cy = py+CELL/2, dir = DIRECTIONS[cell.direction];
+  let t = cell.pistonAnim || 0; // 0=缩回, 1=伸出
+  // 底座
+  ctx.fillStyle = '#3a3a4a'; ctx.fillRect(px+4, py+4, CELL-8, CELL-8);
+  ctx.strokeStyle = '#6a6a7a'; ctx.lineWidth = 2; ctx.strokeRect(px+4, py+4, CELL-8, CELL-8);
+  // 内部活塞体
+  ctx.fillStyle = '#2a2a3a';
+  let inOffX = -dir.dx*3, inOffY = -dir.dy*3;
+  ctx.fillRect(px+8+inOffX, py+8+inOffY, CELL-16, CELL-16);
+  ctx.strokeStyle = '#4a4a5a'; ctx.lineWidth = 1; ctx.strokeRect(px+8+inOffX, py+8+inOffY, CELL-16, CELL-16);
+  // 活塞头位置（动画插值：缩回时4px，伸出时10px）
+  let headDist = 4 + t * 6;
+  let headX = cx + dir.dx * headDist, headY = cy + dir.dy * headDist;
+  // 活塞头颜色（插值：棕色→绿色）
+  let hR = Math.round(138+(74-138)*t), hG = Math.round(106+(138-106)*t), hB = Math.round(58+(74-58)*t);
+  let gR = Math.round(187+(122-187)*t), gG = Math.round(154+(202-154)*t), gB = Math.round(90+(122-90)*t);
+  ctx.fillStyle = `rgb(${hR},${hG},${hB})`; ctx.fillRect(headX-6, headY-6, 12, 12);
+  ctx.strokeStyle = `rgb(${gR},${gG},${gB})`; ctx.lineWidth = 1; ctx.strokeRect(headX-6, headY-6, 12, 12);
+  // 活塞臂（动画时显示）
+  if (t > 0.05) {
+    ctx.strokeStyle = '#bbb'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(cx - dir.dx*2, cy - dir.dy*2); ctx.lineTo(headX, headY); ctx.stroke();
+  }
+  // 伸出状态底座发光
+  if (t > 0.5) {
+    ctx.shadowColor='#7aca7a'; ctx.shadowBlur=6; ctx.strokeStyle='#9adb9a'; ctx.lineWidth=1;
+    ctx.strokeRect(px+4, py+4, CELL-8, CELL-8); ctx.shadowBlur=0;
+  }
+  // 粘性球（绿色小圆点表示粘性活塞）
+  ctx.fillStyle = '#5ace5a'; ctx.beginPath(); ctx.arc(headX, headY, 2.5, 0, Math.PI*2); ctx.fill();
+}
+
+function drawLamp(px, py, gx, gy) {
+  let cx = px + CELL/2, cy = py + CELL/2;
+  let powered = false;
+  for (let i = 0; i < 4; i++) {
+    let d = DIRECTIONS[i]; let nx = gx + d.dx, ny = gy + d.dy;
+    if (nx < 0 || nx >= G.cols || ny < 0 || ny >= G.rows) continue;
+    if (G.signals[nx][ny] > 0) { powered = true; break; }
+  }
+  ctx.fillStyle = powered ? '#5a3a1a' : '#2a2a3a';
+  ctx.fillRect(px+4, py+4, CELL-8, CELL-8);
+  ctx.strokeStyle = powered ? '#8a6a3a' : '#4a4a5a'; ctx.lineWidth = 2;
+  ctx.strokeRect(px+4, py+4, CELL-8, CELL-8);
+  let r = CELL * 0.22;
+  if (powered) {
+    let g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r*1.5);
+    g.addColorStop(0, '#ffeb3b'); g.addColorStop(0.5, '#ff9800'); g.addColorStop(1, 'rgba(255,152,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(px, py, CELL, CELL);
+    ctx.fillStyle = '#ffeb3b'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+    ctx.shadowColor = '#ff9800'; ctx.shadowBlur = 10;
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1; ctx.strokeRect(px+4, py+4, CELL-8, CELL-8);
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.fillStyle = '#1a1a2a'; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#3a3a4a'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+  }
+}
+
+function drawButton(px, py, cell) {
+  let cx = px + CELL/2, cy = py + CELL/2;
+  let active = cell.buttonActive;
+  ctx.fillStyle = '#3a3a4a'; ctx.fillRect(px+5, py+5, CELL-10, CELL-10);
+  ctx.strokeStyle = '#5a5a6a'; ctx.lineWidth = 2; ctx.strokeRect(px+5, py+5, CELL-10, CELL-10);
+  let btnR = CELL * 0.2;
+  let offsetY = active ? 2 : 0;
+  if (active) {
+    let g = ctx.createRadialGradient(cx, cy+offsetY, 0, cx, cy+offsetY, btnR*1.5);
+    g.addColorStop(0, '#ff6b6b'); g.addColorStop(0.5, '#ff3b3b'); g.addColorStop(1, 'rgba(255,59,59,0)');
+    ctx.fillStyle = g; ctx.fillRect(px, py, CELL, CELL);
+    ctx.fillStyle = '#ff3b3b'; ctx.beginPath(); ctx.arc(cx, cy+offsetY, btnR, 0, Math.PI*2); ctx.fill();
+    ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#ff6b6b'; ctx.lineWidth = 1; ctx.strokeRect(px+5, py+5, CELL-10, CELL-10);
+    ctx.shadowBlur = 0;
+  } else {
+    ctx.fillStyle = '#8b2020'; ctx.beginPath(); ctx.arc(cx, cy+offsetY, btnR, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = '#5b1010'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy+offsetY, btnR, 0, Math.PI*2); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.beginPath(); ctx.arc(cx-btnR*0.3, cy+offsetY-btnR*0.3, btnR*0.4, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+function drawLever(px, py, cell) {
+  let cx = px + CELL/2, cy = py + CELL/2;
+  let on = cell.leverOn;
+  ctx.fillStyle = '#3a3a4a'; ctx.fillRect(px+5, py+5, CELL-10, CELL-10);
+  ctx.strokeStyle = '#5a5a6a'; ctx.lineWidth = 2; ctx.strokeRect(px+5, py+5, CELL-10, CELL-10);
+  ctx.fillStyle = '#2a2a3a'; ctx.beginPath(); ctx.arc(cx, cy+CELL*0.15, CELL*0.1, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#4a4a5a'; ctx.lineWidth = 1; ctx.stroke();
+  let handleLen = CELL * 0.22;
+  let angle = on ? -Math.PI/3 : Math.PI/3;
+  let hx = cx + Math.cos(angle) * handleLen;
+  let hy = cy + CELL*0.15 + Math.sin(angle) * handleLen;
+  if (on) { ctx.shadowColor = '#ff3b3b'; ctx.shadowBlur = 6; }
+  ctx.strokeStyle = on ? '#ff3b3b' : '#888'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx, cy+CELL*0.15); ctx.lineTo(hx, hy); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = on ? '#ff6b6b' : '#aaa'; ctx.beginPath(); ctx.arc(hx, hy, 3, 0, Math.PI*2); ctx.fill();
+  if (on) { ctx.fillStyle = 'rgba(255,59,59,0.15)'; ctx.fillRect(px, py, CELL, CELL); }
+}
 
 function drawComponentIcon(ctx, type, direction, size) {
   ctx.clearRect(0, 0, size, size);
@@ -1997,6 +2355,11 @@ function drawComponentIcon(ctx, type, direction, size) {
       ctx.fillStyle='#8b0000'; ctx.fillRect(4,4,size-8,size-8);
       ctx.strokeStyle='#ff4444'; ctx.lineWidth=2; ctx.strokeRect(4,4,size-8,size-8);
       ctx.fillStyle='#aa1010'; ctx.fillRect(8,8,size-16,size-16); break;
+    case 'stone':
+      ctx.fillStyle='#5a5a6a'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.strokeStyle='#777788'; ctx.lineWidth=2; ctx.strokeRect(4,4,size-8,size-8);
+      ctx.fillStyle='#4a4a5a'; ctx.fillRect(8,8,size-16,size-16);
+      ctx.strokeStyle='#3a3a4a'; ctx.lineWidth=1; ctx.strokeRect(8,8,size-16,size-16); break;
     case 'torch':
       ctx.strokeStyle='#666'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx,cy+6); ctx.stroke();
       ctx.fillStyle='#ff3333'; ctx.beginPath(); ctx.arc(cx,cy-4,4,0,Math.PI*2); ctx.fill(); break;
@@ -2012,6 +2375,29 @@ function drawComponentIcon(ctx, type, direction, size) {
       ctx.fillStyle='#2a2a3a'; ctx.fillRect(4,4,size-8,size-8);
       ctx.fillStyle='#555'; ctx.fillRect(size-12,cy-4,8,8);
       ctx.fillStyle='#999'; ctx.beginPath(); ctx.arc(size-9,cy-1,1,0,Math.PI*2); ctx.arc(size-9,cy+1,1,0,Math.PI*2); ctx.fill(); break;
+    case 'piston':
+      ctx.fillStyle='#3a3a4a'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.strokeStyle='#6a6a7a'; ctx.lineWidth=2; ctx.strokeRect(4,4,size-8,size-8);
+      ctx.fillStyle='#2a2a3a'; ctx.fillRect(6,6,size-12,size-12);
+      ctx.fillStyle='#8a6a3a'; ctx.fillRect(size-14,cy-4,8,8);
+      ctx.fillStyle='#5ace5a'; ctx.beginPath(); ctx.arc(size-10,cy,2,0,Math.PI*2); ctx.fill(); break;
+    case 'lamp':
+      ctx.fillStyle='#2a2a3a'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.strokeStyle='#4a4a5a'; ctx.lineWidth=2; ctx.strokeRect(4,4,size-8,size-8);
+      ctx.fillStyle='#1a1a2a'; ctx.beginPath(); ctx.arc(cx,cy,size*0.18,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#ff9800'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,size*0.18,0,Math.PI*2); ctx.stroke(); break;
+    case 'button':
+      ctx.fillStyle='#3a3a4a'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.strokeStyle='#5a5a6a'; ctx.lineWidth=2; ctx.strokeRect(4,4,size-8,size-8);
+      ctx.fillStyle='#8b2020'; ctx.beginPath(); ctx.arc(cx,cy,size*0.16,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#5b1010'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,size*0.16,0,Math.PI*2); ctx.stroke(); break;
+    case 'lever':
+      ctx.fillStyle='#3a3a4a'; ctx.fillRect(4,4,size-8,size-8);
+      ctx.strokeStyle='#5a5a6a'; ctx.lineWidth=2; ctx.strokeRect(4,4,size-8,size-8);
+      ctx.fillStyle='#2a2a3a'; ctx.beginPath(); ctx.arc(cx,cy+4,3,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#888'; ctx.lineWidth=2; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(cx,cy+4); ctx.lineTo(cx+6,cy-4); ctx.stroke();
+      ctx.fillStyle='#aaa'; ctx.beginPath(); ctx.arc(cx+6,cy-4,2,0,Math.PI*2); ctx.fill(); break;
   }
 }
 
@@ -2037,9 +2423,28 @@ canvas.addEventListener('click', (e) => {
   // 联机模式区域限制
   if (MP.connected && !isInMyZone(gx)) { showTip('这是队友的区域，你不能在此操作'); return; }
   let cell = G.grid[gx][gy];
+  // 按钮点击激活（橡皮擦模式除外）
+  if (cell.type === T.BUTTON && G.selectedComp !== 'erase') {
+    cell.buttonActive = true; cell.buttonTimer = 5;
+    playClick();
+    if (!G.running) { initRestingSignals(); startButtonRestTimer(); render(); }
+    else render();
+    sendToPeer({ t: 'buttonActivate', x: gx, y: gy });
+    return;
+  }
+  // 拉杆点击切换（橡皮擦模式除外）
+  if (cell.type === T.LEVER && G.selectedComp !== 'erase') {
+    cell.leverOn = !cell.leverOn;
+    playClick();
+    if (!G.running) { initRestingSignals(); render(); }
+    else render();
+    sendToPeer({ t: 'leverToggle', x: gx, y: gy, on: cell.leverOn });
+    return;
+  }
   if (G.selectedComp && G.selectedComp !== 'erase') {
     if (cell.type !== T.EMPTY) {
       if (cell.type === G.selectedComp) {
+        retractAllPistons();
         let oldDir = cell.direction, oldDelay = cell.delay, oldMode = cell.mode;
         if (cell.type === T.REPEATER) cell.delay = (cell.delay % 4) + 1;
         else if (cell.type === T.COMPARATOR) cell.mode = cell.mode === 'compare' ? 'subtract' : 'compare';
@@ -2052,14 +2457,17 @@ canvas.addEventListener('click', (e) => {
       return;
     }
     if (G.level.limits && G.level.limits[G.selectedComp]) { let used = G.compCounts[G.selectedComp] || 0; if (used >= G.level.limits[G.selectedComp]) { showTip(COMP_NAMES[G.selectedComp] + '已达上限'); return; } }
+    retractAllPistons();
     cell.type = G.selectedComp; cell.direction = G.selectedRotate; cell.delay = 1; cell.mode = 'compare';
-    cell.outputActive=false; cell.prevInput=false; cell.eventQueue=[]; cell.extinguished=false; cell.pulsing=false; cell.pulseTimer=0; cell.prevFrontSignal=0; cell.outputStrength=0; cell.cooldown=0;
+    cell.outputActive=false; cell.prevInput=false; cell.eventQueue=[]; cell.extinguished=false; cell.pulsing=false; cell.pulseTimer=0; cell.prevFrontSignal=0; cell.outputStrength=0; cell.cooldown=0; cell.extended=false; cell.pushedBlockType=null; cell.pistonCooldown=0;
+    cell.buttonActive=false; cell.buttonTimer=0; cell.leverOn=false;
     G.compCounts[G.selectedComp] = (G.compCounts[G.selectedComp] || 0) + 1;
     playPlace(); resetSimulation(); updateInfoBar(); render();
     sendToPeer({ t: 'place', x: gx, y: gy, comp: G.selectedComp, dir: G.selectedRotate, delay: 1, mode: 'compare' });
   } else if (G.selectedComp === 'erase') {
     if (cell.type === T.EMPTY || cell.type === T.INPUT || cell.type === T.OUTPUT) return;
     if (MP.connected && !isInMyZone(gx)) { showTip('这是队友区域内的元件，你不能移除'); return; }
+    retractAllPistons();
     G.compCounts[cell.type] = Math.max(0, (G.compCounts[cell.type] || 1) - 1);
     cell.type = T.EMPTY; cell.direction = 0; cell.delay = 1;
     playRemove(); resetSimulation(); updateInfoBar(); render();
@@ -2190,13 +2598,18 @@ function loadFromFile(file) {
       introSeen = new Set(data.introSeen || []);
       localStorage.setItem('rs_intro_seen', JSON.stringify([...introSeen]));
       G.levelLayouts = data.levelLayouts || {};
-      let targetIdx = data.levelIdx || 0;
-      if (targetIdx >= LEVELS.length) targetIdx = 0;
-      G.levelIdx = targetIdx; G.level = LEVELS[targetIdx]; G.selectedComp = null;
-      initGrid(G.level); restoreLayout(targetIdx);
-      buildComponentBar(); buildLevelSelector(); updateInfoBar();
-      document.getElementById('hint').textContent = '提示: ' + (G.level.hint || '');
-      pauseSimulation(); resizeCanvas(); render();
+      let targetIdx = data.levelIdx;
+      if (targetIdx === undefined || targetIdx === null) targetIdx = 0;
+      if (targetIdx === -1) {
+        loadFreeMode();
+      } else {
+        if (targetIdx >= LEVELS.length) targetIdx = 0;
+        G.levelIdx = targetIdx; G.level = LEVELS[targetIdx]; G.selectedComp = null;
+        initGrid(G.level); restoreLayout(targetIdx);
+        buildComponentBar(); buildLevelSelector(); updateInfoBar();
+        document.getElementById('hint').textContent = '提示: ' + (G.level.hint || '');
+        pauseSimulation(); resizeCanvas(); render();
+      }
       hideHome();
       showTip('存档已读取！');
       // 联机模式下同步给队友
@@ -2242,6 +2655,38 @@ document.getElementById('homeStartBtn').onclick = () => {
   if (G.completed.size >= LEVELS.length) nextLevel = 0;
   loadLevel(nextLevel);
 };
+document.getElementById('homeFreeBtn').onclick = () => {
+  playClick(); hideHome();
+  loadFreeMode();
+};
+function loadFreeMode() {
+  if (G.level !== null) captureLayout();
+  let freeLevel = {
+    name: '自由模式',
+    desc: '自由搭建，开放所有零件，无对错判断',
+    cols: 20, rows: 12,
+    components: ['dust', 'block', 'torch', 'repeater', 'comparator', 'observer', 'stone', 'piston', 'lamp', 'button', 'lever'],
+    freeMode: true,
+  };
+  G.levelIdx = -1; G.level = freeLevel; G.selectedComp = null;
+  initGrid(freeLevel);
+  let layout = G.levelLayouts['free'];
+  if (layout && layout.length > 0) {
+    for (let item of layout) {
+      if (item.x < 0 || item.x >= G.cols || item.y < 0 || item.y >= G.rows) continue;
+      let c = G.grid[item.x][item.y];
+      if (c.type === T.INPUT || c.type === T.OUTPUT) continue;
+      c.type = item.type; c.direction = item.direction || 0; c.delay = item.delay || 1; c.mode = item.mode || 'compare';
+      c.buttonActive=false; c.buttonTimer=0; c.leverOn=item.leverOn||false;
+      G.compCounts[item.type] = (G.compCounts[item.type] || 0) + 1;
+    }
+  }
+  buildComponentBar(); buildLevelSelector(); updateInfoBar();
+  document.getElementById('hint').textContent = '提示: 自由模式 — 放置红石火把/红石块作为信号源，用红石灯检测信号';
+  document.getElementById('hint').style.color = '#4ecca3';
+  pauseSimulation(); resizeCanvas(); render();
+  if (!MP.syncing) sendToPeer({ t: 'level', idx: 0 });
+}
 // 生成随机关卡并加入LEVELS（在G初始化后）
 LEVELS.push(generateRandomLevel());
 
