@@ -339,6 +339,7 @@
 </head>
 <body>
 
+<!-- 联机聊天区 -->
 <div id="chatPanel">
   <div class="chat-header">&#128172; 联机聊天</div>
   <div class="chat-messages" id="chatMessages"></div>
@@ -369,8 +370,10 @@
   <span class="level-desc" id="levelDesc"></span>
   <span><span class="label">目标延迟:</span> <span class="target" id="targetDelay">-</span></span>
   <span><span class="label">目标持续:</span> <span class="target" id="targetDuration">-</span></span>
+  <span id="targetStrengthInfo" style="display:none"><span class="label">目标强度:</span> <span class="target" id="targetStrength">-</span></span>
   <span><span class="label">当前延迟:</span> <span class="current" id="currentDelay">-</span></span>
   <span><span class="label">当前持续:</span> <span class="current" id="currentDuration">-</span></span>
+  <span id="currentStrengthInfo" style="display:none"><span class="label">当前强度:</span> <span class="current" id="currentStrength">-</span></span>
   <span><span class="label">Tick:</span> <span class="current" id="tickDisplay">0</span></span>
 </div>
 
@@ -528,216 +531,6 @@ function playFail() {
   let notes = [400, 350, 300, 250];
   notes.forEach((f, i) => setTimeout(() => playTone(f, 0.12, 'sawtooth', 0.12), i * 80));
 }
-
-// ============================================================
-//  常量定义
-// ============================================================
-const CELL = 48;
-const TICK_MS = 120;
-const DIRECTIONS = [
-  { dx: 1, dy: 0 },
-  { dx: 0, dy: 1 },
-  { dx: -1, dy: 0 },
-  { dx: 0, dy: -1 },
-];
-
-const T = {
-  EMPTY: 'empty', DUST: 'dust', BLOCK: 'block', TORCH: 'torch',
-  REPEATER: 'repeater', COMPARATOR: 'comparator', OBSERVER: 'observer',
-  INPUT: 'input', OUTPUT: 'output',
-};
-
-const COMP_NAMES = {
-  dust: '红石粉', block: '红石块', torch: '红石火把',
-  repeater: '中继器', comparator: '比较器', observer: '侦测器',
-};
-
-const COMP_INTROS = {
-  dust: {
-    title: '红石粉',
-    desc: '最基础的信号传输元件。信号每经过1格红石粉<b>衰减1点</b>（从15开始），同时产生<b>1tick延迟</b>。信号会向所有相连的方向传播，摆放成路径即可连接输入和输出。',
-    tip: '左键放置 | 右键移除 | 按R键可旋转有方向的元件',
-  },
-  repeater: {
-    title: '中继器',
-    desc: '<b>单向</b>信号传输元件，只从背面输入、正面输出。点击可调节延迟档位（1~4tick），能将信号<b>恢复到15点</b>并增加精确延迟。延迟 = 档位值 + 1tick。',
-    tip: '放置后点击可切换延迟档位(1~4)，按R键旋转方向',
-  },
-  observer: {
-    title: '侦测器',
-    desc: '检测<b>前方</b>格子的信号变化。当检测到信号<b>上升沿</b>（从无到有）时，从背面输出一个<b>2tick短脉冲</b>信号（强度15）。常用于将长信号转换为短脉冲。',
-    tip: '侦测器"脸"朝信号来源方向，背面输出脉冲。按R键旋转',
-  },
-  torch: {
-    title: '红石火把',
-    desc: '<b>信号反相器</b>。当火把<b>背面</b>有信号时火把熄灭（输出0）；背面无信号时火把点亮（输出15）。可用于构建逻辑非门。注意：火把是单向元件，只从背面输入。',
-    tip: '火把头指向输出方向，杆部连接输入。按R键旋转',
-  },
-  block: {
-    title: '红石块',
-    desc: '<b>永久信号源</b>。红石块始终输出满强度信号（15点），无需任何输入即可供电。可作为常亮电源使用，也能传导信号。',
-    tip: '无需输入，始终输出信号强度15',
-  },
-  comparator: {
-    title: '比较器',
-    desc: '<b>信号处理</b>元件。背面为主输入，左右两侧为侧输入。<b>比较模式</b>：主输入≥侧输入时直通信号；<b>减法模式</b>：输出 = 主输入 - 侧输入。点击可切换模式，按R键旋转方向。',
-    tip: '三角尖端为输出方向，背面为主输入。点击切换比较/减法模式',
-  },
-};
-
-// ============================================================
-//  关卡数据（由生成器注入）
-// ============================================================
-const LEVELS = [
-  {
-    name: "初识红石",
-    desc: "用红石粉连接输入和输出",
-    cols: 8, rows: 6,
-    input: {"x": 1, "y": 3, "duration": 10, "strength": 15},
-    output: {"x": 6, "y": 3},
-    target: {"delay": 4, "duration": 10},
-    components: ["dust"],
-    limits: {},
-    hint: "选中红石粉，点击网格放置，连接输入点和输出点",
-    par: 5
-  },
-  {
-    name: "蜿蜒之路",
-    desc: "信号需要拐弯才能到达",
-    cols: 10, rows: 7,
-    input: {"x": 1, "y": 1, "duration": 10, "strength": 15},
-    output: {"x": 8, "y": 6},
-    target: {"delay": 11, "duration": 10},
-    components: ["dust"],
-    limits: {},
-    hint: "从输入(1,1)到输出(8,6)，先向右7格再向下5格，共11格红石粉",
-    par: 12
-  },
-  {
-    name: "精确制导",
-    desc: "延迟必须精确匹配目标",
-    cols: 12, rows: 8,
-    input: {"x": 1, "y": 1, "duration": 10, "strength": 15},
-    output: {"x": 11, "y": 6},
-    target: {"delay": 14, "duration": 10},
-    components: ["dust"],
-    limits: {},
-    hint: "最短路径是14格红石粉(曼哈顿距离15-1)，也可以绕路到达相同的延迟",
-    par: 15
-  },
-  {
-    name: "延迟的艺术",
-    desc: "直线距离不够，用中继器增加延迟",
-    cols: 12, rows: 8,
-    input: {"x": 1, "y": 4, "duration": 10, "strength": 15},
-    output: {"x": 10, "y": 4},
-    target: {"delay": 15, "duration": 10},
-    components: ["dust", "repeater"],
-    limits: {"dust": 10, "repeater": 3},
-    hint: "最短8格红石粉=延迟8。用2个中继器(delay=3和4)替换2格红石粉：6+4+5=15",
-    par: 12
-  },
-  {
-    name: "脉冲转换",
-    desc: "将长信号转为短信号",
-    cols: 11, rows: 8,
-    input: {"x": 1, "y": 4, "duration": 20, "strength": 15},
-    output: {"x": 9, "y": 4},
-    target: {"delay": 7, "duration": 2},
-    components: ["dust", "observer"],
-    limits: {"dust": 10, "observer": 2},
-    hint: "6格红石粉(2,4)-(7,4)+1个侦测器(8,4朝左)=延迟7。侦测器将长信号转为2tick短脉冲",
-    par: 10
-  },
-  {
-    name: "极简主义",
-    desc: "元件有限，精打细算",
-    cols: 12, rows: 8,
-    input: {"x": 1, "y": 1, "duration": 10, "strength": 15},
-    output: {"x": 10, "y": 6},
-    target: {"delay": 18, "duration": 10},
-    components: ["dust", "repeater"],
-    limits: {"dust": 14, "repeater": 3},
-    hint: "用12格红石粉+2个中继器(各delay=2)：12+3+3=18",
-    par: 14
-  },
-  {
-    name: "脉冲延迟",
-    desc: "先延迟再转脉冲",
-    cols: 12, rows: 8,
-    input: {"x": 1, "y": 4, "duration": 15, "strength": 15},
-    output: {"x": 10, "y": 4},
-    target: {"delay": 14, "duration": 2},
-    components: ["dust", "repeater", "observer"],
-    limits: {"dust": 12, "repeater": 3, "observer": 2},
-    hint: "8格红石粉+中继器(delay=4)+侦测器=8+5+1=14，侦测器将长信号转为2tick脉冲",
-    par: 14
-  },
-  {
-    name: "逻辑非门",
-    desc: "火把默认输出信号，输入信号到达后火把熄灭——利用反相特性制造短脉冲",
-    cols: 12, rows: 8,
-    input: {"x": 1, "y": 4, "duration": 15, "strength": 15},
-    output: {"x": 10, "y": 4},
-    target: {"delay": 3, "duration": 5},
-    components: ["dust", "torch"],
-    limits: {"dust": 10, "torch": 3},
-    hint: "红石火把背面无信号时输出15。铺4格红石粉(2,4)-(5,4)接火把(6,4朝右)，再铺3格(7,4)-(9,4)到输出。火把先输出信号(延迟3)，输入到达后火把熄灭(持续5)",
-    par: 8,
-    logic: "not"
-  },
-  {
-    name: "逻辑或门",
-    desc: "两路信号汇合，任一输入有信号时输出就有信号",
-    cols: 12, rows: 8,
-    inputs: [{"x": 1, "y": 2, "duration": 10, "strength": 15, "delay": 0}, {"x": 1, "y": 6, "duration": 10, "strength": 15, "delay": 5}],
-    output: {"x": 10, "y": 4},
-    target: {"delay": 10, "duration": 15},
-    components: ["dust"],
-    limits: {"dust": 20},
-    hint: "或门=两路红石粉汇合。输入A(1,2)铺路：(2,2)-(5,2)-(5,3)-(5,4)-(6,4)-(9,4)。输入B(1,6)铺路：(2,6)-(5,6)-(5,5)汇入(5,4)。两路在(5,4)汇合后共同连到输出",
-    par: 14,
-    logic: "or"
-  },
-  {
-    name: "逻辑与门",
-    desc: "只有两个输入同时有信号时输出才有信号——用比较器减法模式+火把反相实现",
-    cols: 14, rows: 9,
-    inputs: [{"x": 1, "y": 2, "duration": 20, "strength": 15, "delay": 0}, {"x": 1, "y": 6, "duration": 15, "strength": 15, "delay": 8}],
-    output: {"x": 12, "y": 4},
-    target: {"delay": 20, "duration": 12},
-    components: ["dust", "comparator", "torch"],
-    limits: {"dust": 18, "comparator": 2, "torch": 3},
-    hint: "与门=比较器(减法模式)+火把反相。A接比较器主输入(背面)，B经火把反相后接侧输入。输出=A-NOT B。比较器(8,4)减法模式朝右。A路径：(2,2)-(7,2)-(7,3)-(7,4)。B路径：(2,6)-(4,6)-火把(5,6朝右)-(6,6)-(8,6)-(8,5)接侧面。输出：(9,4)-(11,4)",
-    par: 18,
-    logic: "and"
-  }
-];
-
-// ============================================================
-//  游戏状态
-// ============================================================
-let G = {
-  grid: [], signals: [], cols: 0, rows: 0,
-  levelIdx: 0, level: null, tick: 0,
-  running: false, timer: null,
-  selectedComp: null, selectedRotate: 0,
-  inputActive: false, inputRemaining: 0,
-  outputPowered: false, outputArrivalTick: -1,
-  outputDepartureTick: -1, outputDuration: 0, outputDelay: -1,
-  hoverX: -1, hoverY: -1,
-  completed: new Set((() => {
-    let ver = localStorage.getItem('rs_version');
-    if (ver !== '2') {
-      localStorage.removeItem('rs_completed');
-      localStorage.removeItem('rs_intro_seen');
-      localStorage.setItem('rs_version', '2');
-    }
-    return JSON.parse(localStorage.getItem('rs_completed') || '[]');
-  })()),
-  compCounts: {}, animFrame: 0,
-  inputStates: [], logicResult: null, levelLayouts: {},
-};
 
 // ============================================================
 //  联机系统 (P2P / WebRTC via simple-peer)
@@ -968,13 +761,23 @@ function syncFullState() {
 
 // --- 处理远端数据 ---
 function onPeerData(data) {
-  // 二进制数据 = 语音消息
-  if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
-    playVoiceMessage(data);
+  // simple-peer 浏览器版可能将字符串转为 Uint8Array/Buffer，需先尝试解码为文本
+  let str;
+  if (typeof data === 'string') {
+    str = data;
+  } else if (data instanceof ArrayBuffer) {
+    str = new TextDecoder('utf-8').decode(new Uint8Array(data));
+  } else if (data instanceof Uint8Array) {
+    str = new TextDecoder('utf-8').decode(data);
+  } else {
     return;
   }
   let msg;
-  try { msg = JSON.parse(data.toString()); } catch(e) { return; }
+  try { msg = JSON.parse(str); } catch(e) {
+    // 不是JSON，当作语音二进制数据处理
+    playVoiceMessage(data);
+    return;
+  }
   MP.syncing = true;
   switch (msg.t) {
     case 'place': {
@@ -1132,12 +935,10 @@ async function toggleVoiceRecording() {
   let hint = document.getElementById('chatRecordingHint');
 
   if (voiceRecorder && voiceRecorder.state === 'recording') {
-    // 停止录音并发送
     voiceRecorder.stop();
     return;
   }
 
-  // 开始录音
   if (!MP.connected) { showTip('未连接到队友'); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     showTip('浏览器不支持语音功能'); return;
@@ -1151,9 +952,7 @@ async function toggleVoiceRecording() {
       if (e.data.size > 0) voiceChunks.push(e.data);
     };
     voiceRecorder.onstop = () => {
-      // 停止所有音轨
       stream.getTracks().forEach(t => t.stop());
-      // 恢复UI
       micBtn.classList.remove('recording');
       hint.classList.remove('show');
       clearTimeout(voiceTimer);
@@ -1162,12 +961,10 @@ async function toggleVoiceRecording() {
       if (voiceChunks.length === 0) { showTip('录音为空'); return; }
 
       let blob = new Blob(voiceChunks, { type: 'audio/webm' });
-      // 发送前缀标记 + 时长 + 音频数据
       blob.arrayBuffer().then(buf => {
-        // 格式: [4字节magic 'VOIC'][4字节时长秒][音频数据]
         let header = new ArrayBuffer(8);
         let dv = new DataView(header);
-        dv.setUint32(0, 0x564F4943); // 'VOIC'
+        dv.setUint32(0, 0x564F4943);
         dv.setUint32(4, duration);
         let combined = new Uint8Array(8 + buf.byteLength);
         combined.set(new Uint8Array(header), 0);
@@ -1178,7 +975,6 @@ async function toggleVoiceRecording() {
           showTip('发送失败: ' + e.message);
           return;
         }
-        // 在本地显示
         addVoiceMessage(duration, blob, 'self');
         playClick();
       });
@@ -1189,7 +985,6 @@ async function toggleVoiceRecording() {
     micBtn.classList.add('recording');
     hint.classList.add('show');
 
-    // 最多录音60秒
     voiceTimer = setTimeout(() => {
       if (voiceRecorder && voiceRecorder.state === 'recording') {
         voiceRecorder.stop();
@@ -1203,11 +998,10 @@ async function toggleVoiceRecording() {
 
 function playVoiceMessage(data) {
   let arr = new Uint8Array(data);
-  // 检查magic头
   if (arr.length < 8) return;
   let dv = new DataView(arr.buffer);
   let magic = dv.getUint32(0);
-  if (magic !== 0x564F4943) return; // 不是语音消息
+  if (magic !== 0x564F4943) return;
   let duration = dv.getUint32(4);
   let audioData = arr.slice(8);
   let blob = new Blob([audioData], { type: 'audio/webm' });
@@ -1248,7 +1042,6 @@ function addVoiceMessage(duration, blob, who) {
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;
 
-  // 收到语音消息时自动播放
   if (who === 'other') {
     let audio = new Audio(URL.createObjectURL(blob));
     audio.play().catch(() => {});
@@ -1302,6 +1095,269 @@ document.getElementById('chatInput').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); sendChatMessage(); }
 });
 document.getElementById('chatMicBtn').onclick = () => { toggleVoiceRecording(); };
+
+// ============================================================
+//  常量定义
+// ============================================================
+const CELL = 48;
+const TICK_MS = 120;
+const DIRECTIONS = [
+  { dx: 1, dy: 0 },
+  { dx: 0, dy: 1 },
+  { dx: -1, dy: 0 },
+  { dx: 0, dy: -1 },
+];
+
+const T = {
+  EMPTY: 'empty', DUST: 'dust', BLOCK: 'block', TORCH: 'torch',
+  REPEATER: 'repeater', COMPARATOR: 'comparator', OBSERVER: 'observer',
+  INPUT: 'input', OUTPUT: 'output',
+};
+
+const COMP_NAMES = {
+  dust: '红石粉', block: '红石块', torch: '红石火把',
+  repeater: '中继器', comparator: '比较器', observer: '侦测器',
+};
+
+const COMP_INTROS = {
+  dust: {
+    title: '红石粉',
+    desc: '最基础的信号传输元件。信号每经过1格红石粉<b>衰减1点</b>（从15开始），同时产生<b>1tick延迟</b>。信号会向所有相连的方向传播，摆放成路径即可连接输入和输出。',
+    tip: '左键放置 | 右键移除 | 按R键可旋转有方向的元件',
+  },
+  repeater: {
+    title: '中继器',
+    desc: '<b>单向</b>信号传输元件，只从背面输入、正面输出。点击可调节延迟档位（1~4tick），能将信号<b>恢复到15点</b>并增加精确延迟。延迟 = 档位值 + 1tick。',
+    tip: '放置后点击可切换延迟档位(1~4)，按R键旋转方向',
+  },
+  observer: {
+    title: '侦测器',
+    desc: '检测<b>前方</b>格子的信号变化。当检测到信号<b>上升沿</b>（从无到有）时，从背面输出一个<b>2tick短脉冲</b>信号（强度15）。常用于将长信号转换为短脉冲。',
+    tip: '侦测器"脸"朝信号来源方向，背面输出脉冲。按R键旋转',
+  },
+  torch: {
+    title: '红石火把',
+    desc: '<b>信号反相器</b>。当火把<b>背面</b>有信号时火把熄灭（输出0）；背面无信号时火把点亮（输出15）。可用于构建逻辑非门。注意：火把是单向元件，只从背面输入。',
+    tip: '火把头指向输出方向，杆部连接输入。按R键旋转',
+  },
+  block: {
+    title: '红石块',
+    desc: '<b>永久信号源</b>。红石块始终输出满强度信号（15点），无需任何输入即可供电。可作为常亮电源使用，也能传导信号。',
+    tip: '无需输入，始终输出信号强度15',
+  },
+  comparator: {
+    title: '比较器',
+    desc: '<b>信号处理</b>元件。背面为主输入，左右两侧为侧输入。<b>比较模式</b>：主输入≥侧输入时直通信号；<b>减法模式</b>：输出 = 主输入 - 侧输入。点击可切换模式，按R键旋转方向。',
+    tip: '三角尖端为输出方向，背面为主输入。点击切换比较/减法模式',
+  },
+};
+
+// ============================================================
+//  关卡数据（由生成器注入）
+// ============================================================
+const LEVELS = [
+  {
+    name: "初识红石",
+    desc: "用红石粉连接输入和输出",
+    cols: 8, rows: 6,
+    input: {"x": 1, "y": 3, "duration": 10, "strength": 15},
+    output: {"x": 6, "y": 3},
+    target: {"delay": 4, "duration": 10},
+    components: ["dust"],
+    limits: {},
+    hint: "选中红石粉，点击网格放置，连接输入点和输出点",
+    par: 5,
+    preplaced: []
+  },
+  {
+    name: "蜿蜒之路",
+    desc: "信号需要拐弯才能到达",
+    cols: 10, rows: 7,
+    input: {"x": 1, "y": 1, "duration": 10, "strength": 15},
+    output: {"x": 8, "y": 6},
+    target: {"delay": 11, "duration": 10},
+    components: ["dust"],
+    limits: {},
+    hint: "从输入(1,1)到输出(8,6)，先向右7格再向下5格，共11格红石粉",
+    par: 12
+  },
+  {
+    name: "精确制导",
+    desc: "延迟必须精确匹配目标",
+    cols: 12, rows: 8,
+    input: {"x": 1, "y": 1, "duration": 10, "strength": 15},
+    output: {"x": 11, "y": 6},
+    target: {"delay": 14, "duration": 10},
+    components: ["dust"],
+    limits: {},
+    hint: "最短路径是14格红石粉(曼哈顿距离15-1)，也可以绕路到达相同的延迟",
+    par: 15
+  },
+  {
+    name: "延迟的艺术",
+    desc: "直线距离不够，用中继器增加延迟",
+    cols: 12, rows: 8,
+    input: {"x": 1, "y": 4, "duration": 10, "strength": 15},
+    output: {"x": 10, "y": 4},
+    target: {"delay": 15, "duration": 10},
+    components: ["dust", "repeater"],
+    limits: {"dust": 10, "repeater": 3},
+    hint: "最短8格红石粉=延迟8。用2个中继器(delay=3和4)替换2格红石粉：6+4+5=15",
+    par: 12
+  },
+  {
+    name: "脉冲转换",
+    desc: "将长信号转为短信号",
+    cols: 11, rows: 8,
+    input: {"x": 1, "y": 4, "duration": 20, "strength": 15},
+    output: {"x": 9, "y": 4},
+    target: {"delay": 7, "duration": 2},
+    components: ["dust", "observer"],
+    limits: {"dust": 10, "observer": 2},
+    hint: "6格红石粉(2,4)-(7,4)+1个侦测器(8,4朝左)=延迟7。侦测器将长信号转为2tick短脉冲",
+    par: 10
+  },
+  {
+    name: "极简主义",
+    desc: "元件有限，精打细算",
+    cols: 12, rows: 8,
+    input: {"x": 1, "y": 1, "duration": 10, "strength": 15},
+    output: {"x": 10, "y": 6},
+    target: {"delay": 18, "duration": 10},
+    components: ["dust", "repeater"],
+    limits: {"dust": 14, "repeater": 3},
+    hint: "用12格红石粉+2个中继器(各delay=2)：12+3+3=18",
+    par: 14
+  },
+  {
+    name: "脉冲延迟",
+    desc: "先延迟再转脉冲",
+    cols: 12, rows: 8,
+    input: {"x": 1, "y": 4, "duration": 15, "strength": 15},
+    output: {"x": 10, "y": 4},
+    target: {"delay": 14, "duration": 2},
+    components: ["dust", "repeater", "observer"],
+    limits: {"dust": 12, "repeater": 3, "observer": 2},
+    hint: "8格红石粉+中继器(delay=4)+侦测器=8+5+1=14，侦测器将长信号转为2tick脉冲",
+    par: 14
+  },
+  {
+    name: "逻辑非门",
+    desc: "火把默认输出信号，输入信号到达后火把熄灭——利用反相特性制造短脉冲",
+    cols: 12, rows: 8,
+    input: {"x": 1, "y": 4, "duration": 15, "strength": 15},
+    output: {"x": 10, "y": 4},
+    target: {"delay": 3, "duration": 5},
+    components: ["dust", "torch"],
+    limits: {"dust": 10, "torch": 3},
+    hint: "红石火把背面无信号时输出15。铺4格红石粉(2,4)-(5,4)接火把(6,4朝右)，再铺3格(7,4)-(9,4)到输出。火把先输出信号(延迟3)，输入到达后火把熄灭(持续5)",
+    par: 8,
+    logic: "not"
+  },
+  {
+    name: "逻辑或门",
+    desc: "两路信号汇合，任一输入有信号时输出就有信号",
+    cols: 12, rows: 8,
+    inputs: [{"x": 1, "y": 2, "duration": 10, "strength": 15, "delay": 0}, {"x": 1, "y": 6, "duration": 10, "strength": 15, "delay": 5}],
+    output: {"x": 10, "y": 4},
+    target: {"delay": 10, "duration": 15},
+    components: ["dust"],
+    limits: {"dust": 20},
+    hint: "或门=两路红石粉汇合。输入A(1,2)铺路：(2,2)-(5,2)-(5,3)-(5,4)-(6,4)-(9,4)。输入B(1,6)铺路：(2,6)-(5,6)-(5,5)汇入(5,4)。两路在(5,4)汇合后共同连到输出",
+    par: 14,
+    logic: "or"
+  },
+  {
+    name: "逻辑与门",
+    desc: "只有两个输入同时有信号时输出才有信号——用比较器减法模式+火把反相实现",
+    cols: 14, rows: 9,
+    inputs: [{"x": 1, "y": 2, "duration": 20, "strength": 15, "delay": 0}, {"x": 1, "y": 6, "duration": 15, "strength": 15, "delay": 8}],
+    output: {"x": 12, "y": 4},
+    target: {"delay": 20, "duration": 12},
+    components: ["dust", "comparator", "torch"],
+    limits: {"dust": 18, "comparator": 2, "torch": 3},
+    hint: "与门=比较器(减法模式)+火把反相。A接比较器主输入(背面)，B经火把反相后接侧输入。输出=A-NOT B。比较器(8,4)减法模式朝右。A路径：(2,2)-(7,2)-(7,3)-(7,4)。B路径：(2,6)-(4,6)-火把(5,6朝右)-(6,6)-(8,6)-(8,5)接侧面。输出：(9,4)-(11,4)",
+    par: 18,
+    logic: "and"
+  },
+  {
+    name: "信号衰减",
+    desc: "信号随距离衰减，用中继器恢复强度",
+    cols: 14, rows: 6,
+    input: {"x": 1, "y": 3, "duration": 10, "strength": 15},
+    output: {"x": 12, "y": 3},
+    target: {"delay": 11, "duration": 10, "strength": 15},
+    components: ["dust", "repeater"],
+    limits: {"dust": 12, "repeater": 3},
+    hint: "输入到输出直线11格，纯红石粉信号只剩4点。把第11格换成中继器(1档朝右)：9格红石粉(2,3)-(10,3)+中继器(11,3)恢复到15+输出(12,3)，延迟=9+2=11，强度=15",
+    par: 5,
+    preplaced: []
+  },
+  {
+    name: "减法",
+    desc: "输出B-A的值",
+    cols: 14, rows: 9,
+    inputs: [{"x": 2, "y": 2, "duration": 15, "strength": 10, "delay": 0}, {"x": 1, "y": 4, "duration": 15, "strength": 15, "delay": 0}],
+    output: {"x": 6, "y": 4},
+    target: {"delay": 8, "duration": 11, "strength": 5},
+    components: ["dust", "repeater", "comparator"],
+    limits: {},
+    hint: "使用比较器的S模式",
+    par: 5,
+    preplaced: []
+  },
+  {
+    name: "时钟",
+    desc: "时钟",
+    cols: 14, rows: 9,
+    input: {"x": 5, "y": 4, "duration": 15, "strength": 15},
+    output: {"x": 11, "y": 4},
+    target: {"delay": 31, "duration": 1},
+    components: ["dust", "torch", "repeater", "comparator", "observer"],
+    limits: {},
+    hint: "输出2tick的信号",
+    par: 5,
+    preplaced: []
+  },
+  {
+    name: "保留信号强度",
+    desc: "输入的强度等于输出的强度",
+    cols: 14, rows: 9,
+    input: {"x": 2, "y": 4, "duration": 10, "strength": 11},
+    output: {"x": 11, "y": 4},
+    target: {"delay": 8, "duration": 10, "strength": 11},
+    components: ["dust", "comparator"],
+    limits: {},
+    hint: "使用比较器的C模式",
+    par: 5,
+    preplaced: []
+  }
+];
+
+// ============================================================
+//  游戏状态
+// ============================================================
+let G = {
+  grid: [], signals: [], cols: 0, rows: 0,
+  levelIdx: 0, level: null, tick: 0,
+  running: false, timer: null,
+  selectedComp: null, selectedRotate: 0,
+  inputActive: false, inputRemaining: 0,
+  outputPowered: false, outputArrivalTick: -1,
+  outputDepartureTick: -1, outputDuration: 0, outputDelay: -1, outputMaxStrength: 0,
+  hoverX: -1, hoverY: -1,
+  completed: new Set((() => {
+    let ver = localStorage.getItem('rs_version');
+    if (ver !== '4') {
+      localStorage.removeItem('rs_completed');
+      localStorage.removeItem('rs_intro_seen');
+      localStorage.setItem('rs_version', '4');
+    }
+    return JSON.parse(localStorage.getItem('rs_completed') || '[]');
+  })()),
+  compCounts: {}, animFrame: 0,
+  inputStates: [], logicResult: null, levelLayouts: {},
+};
 
 function initGrid(level) {
   G.cols = level.cols; G.rows = level.rows;
@@ -1424,15 +1480,17 @@ function endSimulation() {
 }
 
 function checkOutput() {
-  let out = G.level.output; let hasSignal = false;
-  for (let d of DIRECTIONS) { let nx=out.x+d.dx,ny=out.y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; if(G.signals[nx][ny]>0){hasSignal=true;break;} }
-  if (hasSignal && !G.outputPowered) { G.outputPowered = true; G.outputArrivalTick = G.tick; G.outputDelay = G.tick; }
+  let out = G.level.output; let hasSignal = false; let maxStr = 0;
+  for (let d of DIRECTIONS) { let nx=out.x+d.dx,ny=out.y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; if(G.signals[nx][ny]>0){hasSignal=true; if(G.signals[nx][ny]>maxStr)maxStr=G.signals[nx][ny];} }
+  if (hasSignal && !G.outputPowered) { G.outputPowered = true; G.outputArrivalTick = G.tick; G.outputDelay = G.tick; G.outputMaxStrength = maxStr; }
+  if (hasSignal && G.outputPowered && maxStr > G.outputMaxStrength) G.outputMaxStrength = maxStr;
   if (!hasSignal && G.outputPowered) { G.outputPowered = false; G.outputDepartureTick = G.tick; G.outputDuration = G.outputDepartureTick - G.outputArrivalTick; checkWin(); }
 }
 
 function checkWin() {
   let target = G.level.target;
-  if (G.outputDelay === target.delay && G.outputDuration === target.duration) {
+  let strengthOk = target.strength === undefined || G.outputMaxStrength === target.strength;
+  if (G.outputDelay === target.delay && G.outputDuration === target.duration && strengthOk) {
     G.completed.add(G.levelIdx);
     localStorage.setItem('rs_completed', JSON.stringify([...G.completed]));
     pauseSimulation(); showWinModal();
@@ -1453,7 +1511,7 @@ function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.t
 function resetSimulation() {
   pauseSimulation(); G.tick = 0; G.inputActive = false; G.inputRemaining = 0;
   for (let s of G.inputStates) { s.remaining = 0; s.active = false; s.delay = 0; }
-  G.outputPowered = false; G.outputArrivalTick = -1; G.outputDepartureTick = -1; G.outputDelay = -1; G.outputDuration = 0; G.animFrame = 0;
+  G.outputPowered = false; G.outputArrivalTick = -1; G.outputDepartureTick = -1; G.outputDelay = -1; G.outputDuration = 0; G.outputMaxStrength = 0; G.animFrame = 0;
   for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { G.signals[x][y] = 0; let c = G.grid[x][y]; c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0; }
   render(); updateInfoBar();
 }
@@ -1628,6 +1686,18 @@ function updateInfoBar() {
   cuEl.textContent = G.outputDuration > 0 ? G.outputDuration + ' tick' : (G.outputPowered ? '...' : '-');
   cdEl.className = (G.outputDelay === lv.target.delay) ? 'matched' : 'current';
   cuEl.className = (G.outputDuration === lv.target.duration) ? 'matched' : 'current';
+  // 信号强度（可选）
+  let tsInfo = document.getElementById('targetStrengthInfo');
+  let csInfo = document.getElementById('currentStrengthInfo');
+  if (lv.target.strength !== undefined) {
+    tsInfo.style.display = ''; csInfo.style.display = '';
+    document.getElementById('targetStrength').textContent = lv.target.strength;
+    let csEl = document.getElementById('currentStrength');
+    csEl.textContent = G.outputMaxStrength > 0 ? G.outputMaxStrength : (G.outputPowered ? '...' : '-');
+    csEl.className = (G.outputMaxStrength === lv.target.strength && G.outputMaxStrength > 0) ? 'matched' : 'current';
+  } else {
+    tsInfo.style.display = 'none'; csInfo.style.display = 'none';
+  }
   document.getElementById('tickDisplay').textContent = G.tick;
   if (G.level.limits) { for (let comp in G.level.limits) { let el = document.getElementById('count-' + comp); if (el) { let used = G.compCounts[comp] || 0; el.textContent = G.level.limits[comp] - used; el.style.color = used >= G.level.limits[comp] ? '#e94560' : '#4ecca3'; } } }
 }
@@ -1724,6 +1794,7 @@ function drawDust(px, py, x, y, signal) {
   let cx = px + CELL/2, cy = py + CELL/2;
   let baseColor = signal > 0 ? '#ff3b3b' : '#8b2020';
   let glowColor = signal > 0 ? '#ff6b6b' : '#5b1010';
+  // 检查四个方向是否有可连接的邻居
   let conns = [false, false, false, false];
   let hasConn = false;
   for (let i = 0; i < 4; i++) {
@@ -1738,6 +1809,7 @@ function drawDust(px, py, x, y, signal) {
       } else { conns[i] = true; hasConn = true; }
     }
   }
+  // 无连接时画小圆点
   if (!hasConn) {
     ctx.fillStyle = glowColor; ctx.beginPath(); ctx.arc(cx, cy, 5, 0, Math.PI*2); ctx.fill();
   } else {
@@ -1942,6 +2014,13 @@ document.getElementById('finalCloseBtn').onclick = () => { playClick(); document
 document.getElementById('failRetryBtn').onclick = () => { playClick(); document.getElementById('failModal').classList.remove('show'); loadLevel(G.levelIdx); };
 document.getElementById('failCloseBtn').onclick = () => { playClick(); document.getElementById('failModal').classList.remove('show'); };
 
+document.getElementById('soundBtn').onclick = () => {
+  soundEnabled = !soundEnabled;
+  let btn = document.getElementById('soundBtn');
+  if (soundEnabled) { btn.innerHTML = '&#128266; 音效'; playClick(); }
+  else { btn.innerHTML = '&#128263; 静音'; }
+};
+
 function showWinModal() {
   let modal = document.getElementById('winModal');
   let stars = 3, totalUsed = 0;
@@ -1950,7 +2029,7 @@ function showWinModal() {
   if (totalUsed > par) stars = 2;
   if (totalUsed > par * 1.5) stars = 1;
   document.getElementById('winStars').textContent = '\u2605 '.repeat(stars).trim() + ' \u2606'.repeat(3 - stars);
-  document.getElementById('winInfo').innerHTML = '<b style="font-size:22px;color:#4ecca3">' + G.level.name + '</b><br><br>延迟: ' + G.outputDelay + ' tick (目标 ' + G.level.target.delay + ')<br>持续: ' + G.outputDuration + ' tick (目标 ' + G.level.target.duration + ')<br>使用元件: ' + totalUsed + ' / 推荐 ' + par;
+  document.getElementById('winInfo').innerHTML = '<b style="font-size:22px;color:#4ecca3">' + G.level.name + '</b><br><br>延迟: ' + G.outputDelay + ' tick (目标 ' + G.level.target.delay + ')<br>持续: ' + G.outputDuration + ' tick (目标 ' + G.level.target.duration + ')' + (G.level.target.strength !== undefined ? '<br>强度: ' + G.outputMaxStrength + ' (目标 ' + G.level.target.strength + ')' : '') + '<br>使用元件: ' + totalUsed + ' / 推荐 ' + par;
   modal.classList.add('show');
   playWin();
 }
@@ -1965,11 +2044,20 @@ function showFailModal() {
     info = '<b style="font-size:18px;color:#e94560">' + G.level.name + '</b><br><br>';
     let delayOk = G.outputDelay === target.delay;
     let durationOk = G.outputDuration === target.duration;
+    let hasStrength = target.strength !== undefined;
+    let strengthOk = !hasStrength || G.outputMaxStrength === target.strength;
     info += '延迟: <span style="color:' + (delayOk ? '#4ecca3' : '#e94560') + '">' + G.outputDelay + ' tick</span>' + (delayOk ? ' \u2713' : ' (目标 ' + target.delay + ')') + '<br>';
-    info += '持续: <span style="color:' + (durationOk ? '#4ecca3' : '#e94560') + '">' + G.outputDuration + ' tick</span>' + (durationOk ? ' \u2713' : ' (目标 ' + target.duration + ')') + '<br><br>';
-    if (!delayOk && !durationOk) info += '延迟和持续均不匹配，请调整信号路径。';
-    else if (!delayOk) info += '延迟不匹配，请调整路径长度或中继器档位。';
-    else info += '持续时间不匹配，请调整信号路径或输入配置。';
+    info += '持续: <span style="color:' + (durationOk ? '#4ecca3' : '#e94560') + '">' + G.outputDuration + ' tick</span>' + (durationOk ? ' \u2713' : ' (目标 ' + target.duration + ')') + '<br>';
+    if (hasStrength) info += '强度: <span style="color:' + (strengthOk ? '#4ecca3' : '#e94560') + '">' + G.outputMaxStrength + '</span>' + (strengthOk ? ' \u2713' : ' (目标 ' + target.strength + ')') + '<br>';
+    info += '<br>';
+    let fails = [];
+    if (!delayOk) fails.push('延迟');
+    if (!durationOk) fails.push('持续');
+    if (hasStrength && !strengthOk) fails.push('强度');
+    if (fails.length === 0) info += '信号参数已匹配，但可能时序有问题。';
+    else if (fails.length === 1) info += fails[0] + '不匹配，请调整信号路径或元件配置。';
+    else info += fails.join('和') + '均不匹配，请调整信号路径或元件配置。';
+    if (hasStrength && !strengthOk) info += '<br>提示: 信号强度会随红石粉传播递减，使用中继器可以恢复强度。';
   }
   document.getElementById('failInfo').innerHTML = info;
   modal.classList.add('show');
@@ -2037,7 +2125,6 @@ function loadFromFile(file) {
 document.getElementById('saveBtn').onclick = () => saveToFile();
 document.getElementById('loadBtn').onclick = () => { document.getElementById('fileInput').click(); };
 document.getElementById('fileInput').onchange = (e) => { if (e.target.files.length > 0) { loadFromFile(e.target.files[0]); e.target.value = ''; } };
-document.getElementById('soundBtn').onclick = () => { soundEnabled = !soundEnabled; document.getElementById('soundBtn').innerHTML = soundEnabled ? '&#128266; 音效' : '&#128263; 静音'; showTip(soundEnabled ? '音效已开启' : '音效已关闭'); };
 
 function init() { loadLevel(0); showHome(); }
 

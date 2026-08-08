@@ -438,8 +438,10 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
   <span class="level-desc" id="levelDesc"></span>
   <span><span class="label">目标延迟:</span> <span class="target" id="targetDelay">-</span></span>
   <span><span class="label">目标持续:</span> <span class="target" id="targetDuration">-</span></span>
+  <span id="targetStrengthInfo" style="display:none"><span class="label">目标强度:</span> <span class="target" id="targetStrength">-</span></span>
   <span><span class="label">当前延迟:</span> <span class="current" id="currentDelay">-</span></span>
   <span><span class="label">当前持续:</span> <span class="current" id="currentDuration">-</span></span>
+  <span id="currentStrengthInfo" style="display:none"><span class="label">当前强度:</span> <span class="current" id="currentStrength">-</span></span>
   <span><span class="label">Tick:</span> <span class="current" id="tickDisplay">0</span></span>
 </div>
 
@@ -827,13 +829,23 @@ function syncFullState() {
 
 // --- 处理远端数据 ---
 function onPeerData(data) {
-  // 二进制数据 = 语音消息
-  if (data instanceof ArrayBuffer || data instanceof Uint8Array) {
-    playVoiceMessage(data);
+  // simple-peer 浏览器版可能将字符串转为 Uint8Array/Buffer，需先尝试解码为文本
+  let str;
+  if (typeof data === 'string') {
+    str = data;
+  } else if (data instanceof ArrayBuffer) {
+    str = new TextDecoder('utf-8').decode(new Uint8Array(data));
+  } else if (data instanceof Uint8Array) {
+    str = new TextDecoder('utf-8').decode(data);
+  } else {
     return;
   }
   let msg;
-  try { msg = JSON.parse(data.toString()); } catch(e) { return; }
+  try { msg = JSON.parse(str); } catch(e) {
+    // 不是JSON，当作语音二进制数据处理
+    playVoiceMessage(data);
+    return;
+  }
   MP.syncing = true;
   switch (msg.t) {
     case 'place': {
@@ -1223,14 +1235,14 @@ let G = {
   selectedComp: null, selectedRotate: 0,
   inputActive: false, inputRemaining: 0,
   outputPowered: false, outputArrivalTick: -1,
-  outputDepartureTick: -1, outputDuration: 0, outputDelay: -1,
+  outputDepartureTick: -1, outputDuration: 0, outputDelay: -1, outputMaxStrength: 0,
   hoverX: -1, hoverY: -1,
   completed: new Set((() => {
     let ver = localStorage.getItem('rs_version');
-    if (ver !== '2') {
+    if (ver !== '4') {
       localStorage.removeItem('rs_completed');
       localStorage.removeItem('rs_intro_seen');
-      localStorage.setItem('rs_version', '2');
+      localStorage.setItem('rs_version', '4');
     }
     return JSON.parse(localStorage.getItem('rs_completed') || '[]');
   })()),
@@ -1359,15 +1371,17 @@ function endSimulation() {
 }
 
 function checkOutput() {
-  let out = G.level.output; let hasSignal = false;
-  for (let d of DIRECTIONS) { let nx=out.x+d.dx,ny=out.y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; if(G.signals[nx][ny]>0){hasSignal=true;break;} }
-  if (hasSignal && !G.outputPowered) { G.outputPowered = true; G.outputArrivalTick = G.tick; G.outputDelay = G.tick; }
+  let out = G.level.output; let hasSignal = false; let maxStr = 0;
+  for (let d of DIRECTIONS) { let nx=out.x+d.dx,ny=out.y+d.dy; if(nx<0||nx>=G.cols||ny<0||ny>=G.rows)continue; if(G.signals[nx][ny]>0){hasSignal=true; if(G.signals[nx][ny]>maxStr)maxStr=G.signals[nx][ny];} }
+  if (hasSignal && !G.outputPowered) { G.outputPowered = true; G.outputArrivalTick = G.tick; G.outputDelay = G.tick; G.outputMaxStrength = maxStr; }
+  if (hasSignal && G.outputPowered && maxStr > G.outputMaxStrength) G.outputMaxStrength = maxStr;
   if (!hasSignal && G.outputPowered) { G.outputPowered = false; G.outputDepartureTick = G.tick; G.outputDuration = G.outputDepartureTick - G.outputArrivalTick; checkWin(); }
 }
 
 function checkWin() {
   let target = G.level.target;
-  if (G.outputDelay === target.delay && G.outputDuration === target.duration) {
+  let strengthOk = target.strength === undefined || G.outputMaxStrength === target.strength;
+  if (G.outputDelay === target.delay && G.outputDuration === target.duration && strengthOk) {
     G.completed.add(G.levelIdx);
     localStorage.setItem('rs_completed', JSON.stringify([...G.completed]));
     pauseSimulation(); showWinModal();
@@ -1388,7 +1402,7 @@ function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.t
 function resetSimulation() {
   pauseSimulation(); G.tick = 0; G.inputActive = false; G.inputRemaining = 0;
   for (let s of G.inputStates) { s.remaining = 0; s.active = false; s.delay = 0; }
-  G.outputPowered = false; G.outputArrivalTick = -1; G.outputDepartureTick = -1; G.outputDelay = -1; G.outputDuration = 0; G.animFrame = 0;
+  G.outputPowered = false; G.outputArrivalTick = -1; G.outputDepartureTick = -1; G.outputDelay = -1; G.outputDuration = 0; G.outputMaxStrength = 0; G.animFrame = 0;
   for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) { G.signals[x][y] = 0; let c = G.grid[x][y]; c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false; c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0; }
   render(); updateInfoBar();
 }
@@ -1563,6 +1577,18 @@ function updateInfoBar() {
   cuEl.textContent = G.outputDuration > 0 ? G.outputDuration + ' tick' : (G.outputPowered ? '...' : '-');
   cdEl.className = (G.outputDelay === lv.target.delay) ? 'matched' : 'current';
   cuEl.className = (G.outputDuration === lv.target.duration) ? 'matched' : 'current';
+  // 信号强度（可选）
+  let tsInfo = document.getElementById('targetStrengthInfo');
+  let csInfo = document.getElementById('currentStrengthInfo');
+  if (lv.target.strength !== undefined) {
+    tsInfo.style.display = ''; csInfo.style.display = '';
+    document.getElementById('targetStrength').textContent = lv.target.strength;
+    let csEl = document.getElementById('currentStrength');
+    csEl.textContent = G.outputMaxStrength > 0 ? G.outputMaxStrength : (G.outputPowered ? '...' : '-');
+    csEl.className = (G.outputMaxStrength === lv.target.strength && G.outputMaxStrength > 0) ? 'matched' : 'current';
+  } else {
+    tsInfo.style.display = 'none'; csInfo.style.display = 'none';
+  }
   document.getElementById('tickDisplay').textContent = G.tick;
   if (G.level.limits) { for (let comp in G.level.limits) { let el = document.getElementById('count-' + comp); if (el) { let used = G.compCounts[comp] || 0; el.textContent = G.level.limits[comp] - used; el.style.color = used >= G.level.limits[comp] ? '#e94560' : '#4ecca3'; } } }
 }
@@ -1879,6 +1905,13 @@ document.getElementById('finalCloseBtn').onclick = () => { playClick(); document
 document.getElementById('failRetryBtn').onclick = () => { playClick(); document.getElementById('failModal').classList.remove('show'); loadLevel(G.levelIdx); };
 document.getElementById('failCloseBtn').onclick = () => { playClick(); document.getElementById('failModal').classList.remove('show'); };
 
+document.getElementById('soundBtn').onclick = () => {
+  soundEnabled = !soundEnabled;
+  let btn = document.getElementById('soundBtn');
+  if (soundEnabled) { btn.innerHTML = '&#128266; 音效'; playClick(); }
+  else { btn.innerHTML = '&#128263; 静音'; }
+};
+
 function showWinModal() {
   let modal = document.getElementById('winModal');
   let stars = 3, totalUsed = 0;
@@ -1887,7 +1920,7 @@ function showWinModal() {
   if (totalUsed > par) stars = 2;
   if (totalUsed > par * 1.5) stars = 1;
   document.getElementById('winStars').textContent = '\u2605 '.repeat(stars).trim() + ' \u2606'.repeat(3 - stars);
-  document.getElementById('winInfo').innerHTML = '<b style="font-size:22px;color:#4ecca3">' + G.level.name + '</b><br><br>延迟: ' + G.outputDelay + ' tick (目标 ' + G.level.target.delay + ')<br>持续: ' + G.outputDuration + ' tick (目标 ' + G.level.target.duration + ')<br>使用元件: ' + totalUsed + ' / 推荐 ' + par;
+  document.getElementById('winInfo').innerHTML = '<b style="font-size:22px;color:#4ecca3">' + G.level.name + '</b><br><br>延迟: ' + G.outputDelay + ' tick (目标 ' + G.level.target.delay + ')<br>持续: ' + G.outputDuration + ' tick (目标 ' + G.level.target.duration + ')' + (G.level.target.strength !== undefined ? '<br>强度: ' + G.outputMaxStrength + ' (目标 ' + G.level.target.strength + ')' : '') + '<br>使用元件: ' + totalUsed + ' / 推荐 ' + par;
   modal.classList.add('show');
   playWin();
 }
@@ -1902,11 +1935,20 @@ function showFailModal() {
     info = '<b style="font-size:18px;color:#e94560">' + G.level.name + '</b><br><br>';
     let delayOk = G.outputDelay === target.delay;
     let durationOk = G.outputDuration === target.duration;
+    let hasStrength = target.strength !== undefined;
+    let strengthOk = !hasStrength || G.outputMaxStrength === target.strength;
     info += '延迟: <span style="color:' + (delayOk ? '#4ecca3' : '#e94560') + '">' + G.outputDelay + ' tick</span>' + (delayOk ? ' \u2713' : ' (目标 ' + target.delay + ')') + '<br>';
-    info += '持续: <span style="color:' + (durationOk ? '#4ecca3' : '#e94560') + '">' + G.outputDuration + ' tick</span>' + (durationOk ? ' \u2713' : ' (目标 ' + target.duration + ')') + '<br><br>';
-    if (!delayOk && !durationOk) info += '延迟和持续均不匹配，请调整信号路径。';
-    else if (!delayOk) info += '延迟不匹配，请调整路径长度或中继器档位。';
-    else info += '持续时间不匹配，请调整信号路径或输入配置。';
+    info += '持续: <span style="color:' + (durationOk ? '#4ecca3' : '#e94560') + '">' + G.outputDuration + ' tick</span>' + (durationOk ? ' \u2713' : ' (目标 ' + target.duration + ')') + '<br>';
+    if (hasStrength) info += '强度: <span style="color:' + (strengthOk ? '#4ecca3' : '#e94560') + '">' + G.outputMaxStrength + '</span>' + (strengthOk ? ' \u2713' : ' (目标 ' + target.strength + ')') + '<br>';
+    info += '<br>';
+    let fails = [];
+    if (!delayOk) fails.push('延迟');
+    if (!durationOk) fails.push('持续');
+    if (hasStrength && !strengthOk) fails.push('强度');
+    if (fails.length === 0) info += '信号参数已匹配，但可能时序有问题。';
+    else if (fails.length === 1) info += fails[0] + '不匹配，请调整信号路径或元件配置。';
+    else info += fails.join('和') + '均不匹配，请调整信号路径或元件配置。';
+    if (hasStrength && !strengthOk) info += '<br>提示: 信号强度会随红石粉传播递减，使用中继器可以恢复强度。';
   }
   document.getElementById('failInfo').innerHTML = info;
   modal.classList.add('show');
