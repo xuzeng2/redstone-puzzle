@@ -3,23 +3,52 @@
     {
       "name": "初识红石",
       "desc": "用红石粉连接输入和输出",
-      "cols": 8, "rows": 6,
-      "input": {"x": 1, "y": 3, "duration": 10, "strength": 15},
-      "output": {"x": 6, "y": 3},
-      "target": {"delay": 4, "duration": 10},
-      "components": ["dust"],
+      "cols": 8,
+      "rows": 6,
+      "output": {
+        "x": 6,
+        "y": 3
+      },
+      "target": {
+        "delay": 4,
+        "duration": 10
+      },
+      "components": [
+        "dust"
+      ],
       "limits": {},
       "hint": "选中红石粉，点击网格放置，连接输入点和输出点",
-      "par": 5
+      "par": 5,
+      "preplaced": [],
+      "input": {
+        "x": 1,
+        "y": 3,
+        "duration": 10,
+        "strength": 15
+      }
     },
     {
       "name": "蜿蜒之路",
       "desc": "信号需要拐弯才能到达",
-      "cols": 10, "rows": 7,
-      "input": {"x": 1, "y": 1, "duration": 10, "strength": 15},
-      "output": {"x": 8, "y": 6},
-      "target": {"delay": 11, "duration": 10},
-      "components": ["dust"],
+      "cols": 10,
+      "rows": 7,
+      "input": {
+        "x": 1,
+        "y": 1,
+        "duration": 10,
+        "strength": 15
+      },
+      "output": {
+        "x": 8,
+        "y": 6
+      },
+      "target": {
+        "delay": 11,
+        "duration": 10
+      },
+      "components": [
+        "dust"
+      ],
       "limits": {},
       "hint": "从输入(1,1)到输出(8,6)，先向右7格再向下5格，共11格红石粉",
       "par": 12
@@ -27,11 +56,25 @@
     {
       "name": "精确制导",
       "desc": "延迟必须精确匹配目标",
-      "cols": 12, "rows": 8,
-      "input": {"x": 1, "y": 1, "duration": 10, "strength": 15},
-      "output": {"x": 11, "y": 6},
-      "target": {"delay": 14, "duration": 10},
-      "components": ["dust"],
+      "cols": 12,
+      "rows": 8,
+      "input": {
+        "x": 1,
+        "y": 1,
+        "duration": 10,
+        "strength": 15
+      },
+      "output": {
+        "x": 11,
+        "y": 6
+      },
+      "target": {
+        "delay": 14,
+        "duration": 10
+      },
+      "components": [
+        "dust"
+      ],
       "limits": {},
       "hint": "最短路径是14格红石粉(曼哈顿距离15-1)，也可以绕路到达相同的延迟",
       "par": 15
@@ -39,60 +82,152 @@
     {
       "name": "延迟的艺术",
       "desc": "直线距离不够，用中继器增加延迟",
-      "cols": 12, "rows": 8,
-      "input": {"x": 1, "y": 4, "duration": 10, "strength": 15},
-      "output": {"x": 10, "y": 4},
-      "target": {"delay": 15, "duration": 10},
-      "components": ["dust", "repeater"],
-      "limits": {"dust": 10, "repeater": 3},
+      "cols": 12,
+      "rows": 8,
+      "input": {
+        "x": 1,
+        "y": 4,
+        "duration": 10,
+        "strength": 15
+      },
+      "output": {
+        "x": 10,
+        "y": 4
+      },
+      "target": {
+        "delay": 15,
+        "duration": 10
+      },
+      "components": [
+        "dust",
+        "repeater"
+      ],
+      "limits": {
+        "dust": 10,
+        "repeater": 3
+      },
       "hint": "最短8格红石粉=延迟8。用2个中继器(delay=3和4)替换2格红石粉：6+4+5=15",
       "par": 12
     },
     {
       "name": "脉冲转换",
       "desc": "将长信号转为短信号",
-      "cols": 11, "rows": 8,
-      "input": {"x": 1, "y": 4, "duration": 20, "strength": 15},
-      "output": {"x": 9, "y": 4},
-      "target": {"delay": 7, "duration": 2},
-      "components": ["dust", "observer"],
-      "limits": {"dust": 10, "observer": 2},
+      "cols": 11,
+      "rows": 8,
+      "input": {
+        "x": 1,
+        "y": 4,
+        "duration": 20,
+        "strength": 15
+      },
+      "output": {
+        "x": 9,
+        "y": 4
+      },
+      "target": {
+        "delay": 7,
+        "duration": 2
+      },
+      "components": [
+        "dust",
+        "observer"
+      ],
+      "limits": {
+        "dust": 10,
+        "observer": 2
+      },
       "hint": "6格红石粉(2,4)-(7,4)+1个侦测器(8,4朝左)=延迟7。侦测器将长信号转为2tick短脉冲",
       "par": 10
     },
     {
       "name": "极简主义",
       "desc": "元件有限，精打细算",
-      "cols": 12, "rows": 8,
-      "input": {"x": 1, "y": 1, "duration": 10, "strength": 15},
-      "output": {"x": 10, "y": 6},
-      "target": {"delay": 18, "duration": 10},
-      "components": ["dust", "repeater"],
-      "limits": {"dust": 14, "repeater": 3},
+      "cols": 12,
+      "rows": 8,
+      "input": {
+        "x": 1,
+        "y": 1,
+        "duration": 10,
+        "strength": 15
+      },
+      "output": {
+        "x": 10,
+        "y": 6
+      },
+      "target": {
+        "delay": 18,
+        "duration": 10
+      },
+      "components": [
+        "dust",
+        "repeater"
+      ],
+      "limits": {
+        "dust": 14,
+        "repeater": 3
+      },
       "hint": "用12格红石粉+2个中继器(各delay=2)：12+3+3=18",
       "par": 14
     },
     {
       "name": "脉冲延迟",
       "desc": "先延迟再转脉冲",
-      "cols": 12, "rows": 8,
-      "input": {"x": 1, "y": 4, "duration": 15, "strength": 15},
-      "output": {"x": 10, "y": 4},
-      "target": {"delay": 14, "duration": 2},
-      "components": ["dust", "repeater", "observer"],
-      "limits": {"dust": 12, "repeater": 3, "observer": 2},
+      "cols": 12,
+      "rows": 8,
+      "input": {
+        "x": 1,
+        "y": 4,
+        "duration": 15,
+        "strength": 15
+      },
+      "output": {
+        "x": 10,
+        "y": 4
+      },
+      "target": {
+        "delay": 14,
+        "duration": 2
+      },
+      "components": [
+        "dust",
+        "repeater",
+        "observer"
+      ],
+      "limits": {
+        "dust": 12,
+        "repeater": 3,
+        "observer": 2
+      },
       "hint": "8格红石粉+中继器(delay=4)+侦测器=8+5+1=14，侦测器将长信号转为2tick脉冲",
       "par": 14
     },
     {
       "name": "逻辑非门",
       "desc": "火把默认输出信号，输入信号到达后火把熄灭——利用反相特性制造短脉冲",
-      "cols": 12, "rows": 8,
-      "input": {"x": 1, "y": 4, "duration": 15, "strength": 15},
-      "output": {"x": 10, "y": 4},
-      "target": {"delay": 3, "duration": 5},
-      "components": ["dust", "torch"],
-      "limits": {"dust": 10, "torch": 3},
+      "cols": 12,
+      "rows": 8,
+      "input": {
+        "x": 1,
+        "y": 4,
+        "duration": 15,
+        "strength": 15
+      },
+      "output": {
+        "x": 10,
+        "y": 4
+      },
+      "target": {
+        "delay": 3,
+        "duration": 5
+      },
+      "components": [
+        "dust",
+        "torch"
+      ],
+      "limits": {
+        "dust": 10,
+        "torch": 3
+      },
       "hint": "红石火把背面无信号时输出15。铺4格红石粉(2,4)-(5,4)接火把(6,4朝右)，再铺3格(7,4)-(9,4)到输出。火把先输出信号(延迟3)，输入到达后火把熄灭(持续5)",
       "par": 8,
       "logic": "not"
@@ -100,15 +235,38 @@
     {
       "name": "逻辑或门",
       "desc": "两路信号汇合，任一输入有信号时输出就有信号",
-      "cols": 12, "rows": 8,
+      "cols": 12,
+      "rows": 8,
       "inputs": [
-        {"x": 1, "y": 2, "duration": 10, "strength": 15, "delay": 0},
-        {"x": 1, "y": 6, "duration": 10, "strength": 15, "delay": 5}
+        {
+          "x": 1,
+          "y": 2,
+          "duration": 10,
+          "strength": 15,
+          "delay": 0
+        },
+        {
+          "x": 1,
+          "y": 6,
+          "duration": 10,
+          "strength": 15,
+          "delay": 5
+        }
       ],
-      "output": {"x": 10, "y": 4},
-      "target": {"delay": 10, "duration": 15},
-      "components": ["dust"],
-      "limits": {"dust": 20},
+      "output": {
+        "x": 10,
+        "y": 4
+      },
+      "target": {
+        "delay": 10,
+        "duration": 15
+      },
+      "components": [
+        "dust"
+      ],
+      "limits": {
+        "dust": 20
+      },
       "hint": "或门=两路红石粉汇合。输入A(1,2)铺路：(2,2)-(5,2)-(5,3)-(5,4)-(6,4)-(9,4)。输入B(1,6)铺路：(2,6)-(5,6)-(5,5)汇入(5,4)。两路在(5,4)汇合后共同连到输出",
       "par": 14,
       "logic": "or"
@@ -116,18 +274,148 @@
     {
       "name": "逻辑与门",
       "desc": "只有两个输入同时有信号时输出才有信号——用比较器减法模式+火把反相实现",
-      "cols": 14, "rows": 9,
+      "cols": 14,
+      "rows": 9,
       "inputs": [
-        {"x": 1, "y": 2, "duration": 20, "strength": 15, "delay": 0},
-        {"x": 1, "y": 6, "duration": 15, "strength": 15, "delay": 8}
+        {
+          "x": 1,
+          "y": 2,
+          "duration": 20,
+          "strength": 15,
+          "delay": 0
+        },
+        {
+          "x": 1,
+          "y": 6,
+          "duration": 15,
+          "strength": 15,
+          "delay": 8
+        }
       ],
-      "output": {"x": 12, "y": 4},
-      "target": {"delay": 20, "duration": 12},
-      "components": ["dust", "comparator", "torch"],
-      "limits": {"dust": 18, "comparator": 2, "torch": 3},
+      "output": {
+        "x": 12,
+        "y": 4
+      },
+      "target": {
+        "delay": 20,
+        "duration": 12
+      },
+      "components": [
+        "dust",
+        "comparator",
+        "torch"
+      ],
+      "limits": {
+        "dust": 18,
+        "comparator": 2,
+        "torch": 3
+      },
       "hint": "与门=比较器(减法模式)+火把反相。A接比较器主输入(背面)，B经火把反相后接侧输入。输出=A-NOT B。比较器(8,4)减法模式朝右。A路径：(2,2)-(7,2)-(7,3)-(7,4)。B路径：(2,6)-(4,6)-火把(5,6朝右)-(6,6)-(8,6)-(8,5)接侧面。输出：(9,4)-(11,4)",
       "par": 18,
       "logic": "and"
+    },
+    {
+      "name": "信号衰减",
+      "desc": "信号随距离衰减，用中继器恢复强度",
+      "cols": 14,
+      "rows": 6,
+      "output": {
+        "x": 12,
+        "y": 3
+      },
+      "target": {
+        "delay": 11,
+        "duration": 10,
+        "strength": 15
+      },
+      "components": [
+        "dust",
+        "repeater"
+      ],
+      "limits": {
+        "dust": 12,
+        "repeater": 3
+      },
+      "hint": "输入到输出直线11格，纯红石粉信号只剩4点。把第11格换成中继器(1档朝右)：9格红石粉(2,3)-(10,3)+中继器(11,3)恢复到15+输出(12,3)，延迟=9+2=11，强度=15",
+      "par": 5,
+      "preplaced": [],
+      "input": {
+        "x": 1,
+        "y": 3,
+        "duration": 10,
+        "strength": 15
+      }
+    },
+    {
+      "name": "减法",
+      "desc": "输出B-A的值",
+      "cols": 14,
+      "rows": 9,
+      "output": {
+        "x": 6,
+        "y": 4
+      },
+      "target": {
+        "delay": 8,
+        "duration": 11,
+        "strength": 5
+      },
+      "components": [
+        "dust",
+        "repeater",
+        "comparator"
+      ],
+      "limits": {},
+      "hint": "使用比较器的S模式",
+      "par": 5,
+      "preplaced": [],
+      "inputs": [
+        {
+          "x": 2,
+          "y": 2,
+          "duration": 15,
+          "strength": 10,
+          "delay": 0
+        },
+        {
+          "x": 1,
+          "y": 4,
+          "duration": 15,
+          "strength": 15,
+          "delay": 0
+        }
+      ]
+    },
+    {
+      "name": "时钟",
+      "desc": "时钟",
+      "cols": 14,
+      "rows": 9,
+      "output": {
+        "x": 11,
+        "y": 4
+      },
+      "target": {
+        "delay": 31,
+        "duration": 1
+      },
+      "components": [
+        "dust",
+        "torch",
+        "repeater",
+        "comparator",
+        "observer"
+      ],
+      "limits": {},
+      "hint": "输出2tick的信号",
+      "par": 5,
+      "preplaced": [],
+      "input": {
+        "x": 5,
+        "y": 4,
+        "duration": 15,
+        "strength": 15
+      }
     }
   ]
 }
