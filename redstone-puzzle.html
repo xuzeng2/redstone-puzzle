@@ -42,7 +42,7 @@
     margin:10px 0; border:4px solid #0f3460; border-radius:4px;
     background:#0d1117; box-shadow:0 0 20px rgba(233,69,96,.2);
   }
-  canvas { display:block; cursor:pointer; image-rendering:pixelated; }
+  canvas { display:block; cursor:pointer; image-rendering:pixelated; touch-action:none; -webkit-tap-highlight-color:transparent; }
   #controls {
     width:100%; max-width:900px; padding:8px 16px;
     background:#16213e; display:flex; gap:8px; align-items:center; flex-wrap:wrap;
@@ -341,9 +341,92 @@
   #chatPanel .chat-recording-hint.show { display:block; }
   body.chat-open { padding-left:min(240px, max(0px, calc(1380px - 100vw))); }
   body { transition: padding-left 0.3s ease; }
+
+  /* ===== 横屏旋转提示（手机竖屏时显示）===== */
+  #rotateHint {
+    display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+    background:#0d1117; z-index:9999; flex-direction:column;
+    justify-content:center; align-items:center; text-align:center; padding:20px;
+  }
+  #rotateHint.show { display:flex; }
+  #rotateHint .rotate-icon {
+    font-size:64px; margin-bottom:20px; animation:rotateAnim 1.5s ease-in-out infinite;
+  }
+  @keyframes rotateAnim {
+    0%,100% { transform:rotate(0deg); }
+    50% { transform:rotate(90deg); }
+  }
+  #rotateHint .rotate-title { font-size:20px; color:#e94560; margin-bottom:8px; }
+  #rotateHint .rotate-sub { font-size:14px; color:#888; }
+
+  /* ===== 手机响应式布局（横屏）===== */
+  @media (max-width: 920px) and (hover: none) and (pointer: coarse) {
+    body { font-size:13px; }
+    #header {
+      max-width:100%; padding:6px 10px; gap:6px; flex-wrap:nowrap; overflow:hidden;
+    }
+    #header h1 { font-size:14px; white-space:nowrap; }
+    #levelSelector { gap:3px; overflow-x:auto; max-width:45vw; scrollbar-width:none; }
+    #levelSelector::-webkit-scrollbar { display:none; }
+    .level-btn { width:26px; height:26px; font-size:11px; flex-shrink:0; }
+    #mpIndicator { font-size:10px; padding:2px 6px; }
+    #infoBar {
+      max-width:100%; padding:4px 10px; gap:8px; font-size:11px;
+      overflow-x:auto; scrollbar-width:none; flex-wrap:nowrap;
+    }
+    #infoBar::-webkit-scrollbar { display:none; }
+    #infoBar .level-desc { min-width:auto; font-size:11px; white-space:nowrap; }
+    #canvasWrap {
+      margin:4px 0; border-width:2px; max-width:100vw; overflow:hidden;
+    }
+    canvas { max-width:100%; height:auto; max-height:calc(100vh - 220px); }
+    #controls {
+      max-width:100%; padding:4px 10px; gap:4px;
+    }
+    .btn { padding:8px 10px; font-size:12px; }
+    .btn.primary { padding:8px 14px; }
+    #controls .desktop-only { display:none !important; }
+    #controls .mobile-only { display:inline !important; }
+    #componentBar {
+      max-width:100%; padding:4px 10px; gap:4px; overflow-x:auto; scrollbar-width:none;
+    }
+    #componentBar::-webkit-scrollbar { display:none; }
+    #componentBar .label { font-size:10px; white-space:nowrap; }
+    .comp-btn { width:44px; height:44px; flex-shrink:0; }
+    .comp-btn .name { font-size:7px; }
+    #hint { max-width:100%; padding:3px 10px; font-size:10px; }
+    /* 聊天面板改为底部弹出 */
+    #chatPanel {
+      left:0 !important; top:auto !important; bottom:0;
+      width:100% !important; height:200px !important; max-height:50vh;
+      border-right:none; border-top:2px solid #0f3460;
+    }
+    body.chat-open { padding-left:0 !important; padding-bottom:200px; }
+    /* 弹窗缩小 */
+    #winModal .panel, #failModal .panel, #finalModal .panel { padding:24px 20px; max-width:90vw; }
+    #winModal h2 { font-size:28px; }
+    #winModal p { font-size:14px; }
+    #finalModal h2 { font-size:36px; }
+    #finalModal p { font-size:16px; }
+    #introModal .panel { padding:16px 20px; max-width:90vw; }
+    #onlineModal .panel { padding:16px 20px; max-width:90vw; }
+    /* 主页适配 */
+    #homePage .home-title { font-size:32px; }
+    #homePage .home-subtitle { font-size:13px; }
+    #homePage .home-level-btn { width:40px; height:40px; font-size:16px; }
+    #homePage .home-start { padding:12px 36px; font-size:16px; }
+    #homePage .home-free { padding:10px 28px; font-size:14px; }
+  }
 </style>
 </head>
 <body>
+
+<!-- 手机竖屏旋转提示 -->
+<div id="rotateHint">
+  <div class="rotate-icon">&#128244;</div>
+  <div class="rotate-title">请横放手机</div>
+  <div class="rotate-sub">游戏在横屏模式下体验最佳</div>
+</div>
 
 <!-- 联机聊天区 -->
 <div id="chatPanel">
@@ -401,7 +484,8 @@
   <button class="btn" id="homeBtn">&#127968; 主页</button>
   <input type="file" id="fileInput" accept=".json" style="display:none">
   <span style="flex:1"></span>
-  <span style="font-size:12px;color:#888">左键放置 | 右键移除 | R键旋转</span>
+  <span style="font-size:12px;color:#888" class="desktop-only">左键放置 | 右键移除 | R键旋转</span>
+  <span style="font-size:11px;color:#888;display:none" class="mobile-only">点击放置 | 长按删除</span>
 </div>
 
 <div id="componentBar">
@@ -946,6 +1030,8 @@ function addChatSystem(text) {
 
 function positionChatPanel() {
   let chatPanel = document.getElementById('chatPanel');
+  // 手机模式由CSS控制位置，跳过JS定位
+  if (isMobile()) return;
   let header = document.getElementById('header');
   let hint = document.getElementById('hint');
   if (!header || !hint || !chatPanel) return;
@@ -974,7 +1060,25 @@ window.addEventListener('resize', () => {
   if (chatPanel && chatPanel.classList.contains('show')) {
     positionChatPanel();
   }
+  checkOrientation();
 });
+
+// --- 手机横屏检测 ---
+function isMobile() {
+  return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+}
+function checkOrientation() {
+  let hint = document.getElementById('rotateHint');
+  if (!hint) return;
+  // 手机设备 + 竖屏（高>宽）时显示旋转提示
+  if (isMobile() && window.innerHeight > window.innerWidth) {
+    hint.classList.add('show');
+  } else {
+    hint.classList.remove('show');
+  }
+}
+window.addEventListener('orientationchange', () => { setTimeout(checkOrientation, 100); });
+checkOrientation();
 
 // --- 语音消息功能 ---
 let voiceRecorder = null;
@@ -2689,6 +2793,46 @@ canvas.addEventListener('contextmenu', (e) => {
   playRemove(); resetSimulation(); updateInfoBar(); render();
   sendToPeer({ t: 'remove', x: gx, y: gy });
 });
+
+// --- 手机触摸：长按删除元件 ---
+let touchTimer = null;
+let touchStartPos = null;
+let touchLongPressed = false;
+canvas.addEventListener('touchstart', (e) => {
+  if (e.touches.length !== 1) return;
+  let touch = e.touches[0];
+  let rect = canvas.getBoundingClientRect();
+  touchStartPos = {
+    x: touch.clientX, y: touch.clientY,
+    gx: Math.floor((touch.clientX - rect.left) * (canvas.width / rect.width) / CELL),
+    gy: Math.floor((touch.clientY - rect.top) * (canvas.height / rect.height) / CELL),
+  };
+  touchLongPressed = false;
+  touchTimer = setTimeout(() => {
+    touchLongPressed = true;
+    if (!touchStartPos) return;
+    let gx = touchStartPos.gx, gy = touchStartPos.gy;
+    if (gx < 0 || gx >= G.cols || gy < 0 || gy >= G.rows) return;
+    if (MP.connected && !isInMyZone(gx)) { showTip('这是队友的区域，你不能在此操作'); return; }
+    let cell = G.grid[gx][gy];
+    if (cell.type === T.EMPTY || cell.type === T.INPUT || cell.type === T.OUTPUT) return;
+    retractAllPistons();
+    G.compCounts[cell.type] = Math.max(0, (G.compCounts[cell.type] || 1) - 1);
+    cell.type = T.EMPTY; cell.direction = 0;
+    playRemove(); resetSimulation(); updateInfoBar(); render();
+    sendToPeer({ t: 'remove', x: gx, y: gy });
+    // 触觉反馈
+    if (navigator.vibrate) navigator.vibrate(30);
+  }, 500);
+}, { passive: true });
+canvas.addEventListener('touchmove', () => {
+  if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+}, { passive: true });
+canvas.addEventListener('touchend', (e) => {
+  if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+  // 如果长按已触发，阻止后续的click事件
+  if (touchLongPressed) { e.preventDefault(); touchLongPressed = false; }
+}, { passive: false });
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') { G.selectedRotate = (G.selectedRotate + 1) % 4; playRotate(); showTip('方向: ' + ['\u2192','\u2193','\u2190','\u2191'][G.selectedRotate]); render(); }
