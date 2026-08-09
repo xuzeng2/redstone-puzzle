@@ -625,6 +625,7 @@ let MP = {
 function calcBoundary() { MP.boundary = Math.floor(G.cols / 2); }
 function isInMyZone(x) {
   if (!MP.enabled || !MP.connected) return true;
+  if (G.level && G.level.freeMode) return true; // 自由模式共享区域，无限制
   if (MP.myZone === 'left') return x < MP.boundary;
   return x >= MP.boundary;
 }
@@ -635,7 +636,7 @@ function getZoneOf(x) {
 
 // --- 发送消息 ---
 function sendToPeer(msg) {
-  if (MP.connected && MP.peer && !MP.syncing) {
+  if (MP.connected && MP.peer && (!MP.syncing || msg.t === 'cursor')) {
     try { MP.peer.send(JSON.stringify(msg)); } catch(e) { console.error('send error', e); }
   }
 }
@@ -833,7 +834,7 @@ function syncFullState() {
     if (c.type === T.LEVER) item.leverOn = c.leverOn;
     layout.push(item);
   }
-  sendToPeer({ t: 'fullSync', levelIdx: G.levelIdx, layout: layout });
+  sendToPeer({ t: 'fullSync', levelIdx: G.levelIdx, freeMode: !!(G.level && G.level.freeMode), layout: layout });
 }
 
 // --- 处理远端数据 ---
@@ -896,13 +897,30 @@ function onPeerData(data) {
     case 'pause': { if (G.running) pauseSimulation(); break; }
     case 'step': { stepSimulation(); break; }
     case 'level': {
-      if (msg.idx >= 0 && msg.idx < LEVELS.length && msg.idx !== G.levelIdx) {
+      if (msg.idx === -1) {
+        // 自由模式
+        if (!G.level || !G.level.freeMode) loadFreeMode(true);
+      } else if (msg.idx >= 0 && msg.idx < LEVELS.length && msg.idx !== G.levelIdx) {
         loadLevel(msg.idx);
       }
       break;
     }
     case 'fullSync': {
-      if (msg.levelIdx !== undefined && msg.levelIdx !== G.levelIdx) {
+      if (msg.freeMode) {
+        // 自由模式同步
+        if (!G.level || !G.level.freeMode) {
+          loadFreeMode(true);
+        } else {
+          // 已在自由模式，清空自定义元件再重建
+          for (let x = 0; x < G.cols; x++) for (let y = 0; y < G.rows; y++) {
+            let c = G.grid[x][y];
+            if (c.type !== T.INPUT && c.type !== T.OUTPUT) {
+              c.type = T.EMPTY; c.direction = 0; c.delay = 1;
+            }
+          }
+          G.compCounts = {};
+        }
+      } else if (msg.levelIdx !== undefined && msg.levelIdx !== G.levelIdx) {
         G.levelIdx = msg.levelIdx; G.level = LEVELS[msg.levelIdx]; G.selectedComp = null;
         initGrid(G.level);
       } else {
@@ -925,14 +943,16 @@ function onPeerData(data) {
           c.delay = item.delay || 1; c.mode = item.mode || 'compare';
           c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false;
           c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0;
+          c.extended=false; c.pushedBlockType=null; c.pistonCooldown=0;
           c.buttonActive=false; c.buttonTimer=0; c.leverOn=item.leverOn||false;
           G.compCounts[item.type] = (G.compCounts[item.type] || 0) + 1;
         }
       }
       calcBoundary();
       buildComponentBar(); buildLevelSelector(); updateInfoBar();
-      document.getElementById('hint').textContent = '提示: ' + (G.level.hint || '');
-      pauseSimulation(); resizeCanvas(); render();
+      document.getElementById('hint').textContent = '提示: ' + (G.level.hint || (G.level.freeMode ? '自由模式 — 放置红石火把/红石块作为信号源，用红石灯检测信号' : ''));
+      if (G.level.freeMode) document.getElementById('hint').style.color = '#4ecca3';
+      pauseSimulation(); initRestingSignals(); resizeCanvas(); render();
       break;
     }
     case 'cursor': { MP.remoteCursor = { x: msg.x, y: msg.y }; render(); break; }
@@ -1945,6 +1965,8 @@ function showLogicIntro(logicType) {
 
 function buildLevelSelector() {
   let el = document.getElementById('levelSelector'); el.innerHTML = '';
+  if (G.level && G.level.freeMode) { el.style.display = 'none'; return; }
+  el.style.display = 'flex';
   for (let i = 0; i < LEVELS.length; i++) {
     let btn = document.createElement('button');
     btn.className = 'level-btn'; btn.textContent = i + 1;
@@ -2031,16 +2053,16 @@ function resizeCanvas() { canvas.width = G.cols * CELL; canvas.height = G.rows *
 function render() {
   let w = canvas.width, h = canvas.height;
   ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, w, h);
-  // 联机模式：左右区域着色
-  if (MP.enabled && MP.connected) {
+  // 联机模式：左右区域着色（自由模式共享区域不显示）
+  if (MP.enabled && MP.connected && !(G.level && G.level.freeMode)) {
     ctx.fillStyle = 'rgba(233,69,96,0.05)'; ctx.fillRect(0, 0, MP.boundary * CELL, h);
     ctx.fillStyle = 'rgba(78,204,163,0.05)'; ctx.fillRect(MP.boundary * CELL, 0, w - MP.boundary * CELL, h);
   }
   ctx.strokeStyle = '#1a2333'; ctx.lineWidth = 1;
   for (let x = 0; x <= G.cols; x++) { ctx.beginPath(); ctx.moveTo(x*CELL,0); ctx.lineTo(x*CELL,h); ctx.stroke(); }
   for (let y = 0; y <= G.rows; y++) { ctx.beginPath(); ctx.moveTo(0,y*CELL); ctx.lineTo(w,y*CELL); ctx.stroke(); }
-  // 联机模式：分界线
-  if (MP.enabled && MP.connected) {
+  // 联机模式：分界线（自由模式共享区域不显示）
+  if (MP.enabled && MP.connected && !(G.level && G.level.freeMode)) {
     ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.setLineDash([6,4]);
     ctx.beginPath(); ctx.moveTo(MP.boundary * CELL, 0); ctx.lineTo(MP.boundary * CELL, h); ctx.stroke();
     ctx.setLineDash([]);
@@ -2401,6 +2423,7 @@ function drawComponentIcon(ctx, type, direction, size) {
   }
 }
 
+let lastCursorSend = 0;
 canvas.addEventListener('mousemove', (e) => {
   let rect = canvas.getBoundingClientRect();
   let mx = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -2408,12 +2431,14 @@ canvas.addEventListener('mousemove', (e) => {
   G.hoverX = Math.floor(mx / CELL); G.hoverY = Math.floor(my / CELL);
   if (G.hoverX >= G.cols) G.hoverX = -1; if (G.hoverY >= G.rows) G.hoverY = -1;
   render();
-  // 同步光标
-  if (MP.connected && G.hoverX >= 0) {
+  // 同步光标（节流：每50ms最多发一次）
+  let now = Date.now();
+  if (MP.connected && G.hoverX >= 0 && now - lastCursorSend > 50) {
+    lastCursorSend = now;
     sendToPeer({ t: 'cursor', x: G.hoverX, y: G.hoverY });
   }
 });
-canvas.addEventListener('mouseleave', () => { G.hoverX = -1; G.hoverY = -1; render(); });
+canvas.addEventListener('mouseleave', () => { G.hoverX = -1; G.hoverY = -1; render(); if (MP.connected) sendToPeer({ t: 'cursor', x: -1, y: -1 }); });
 canvas.addEventListener('click', (e) => {
   let rect = canvas.getBoundingClientRect();
   let mx = (e.clientX - rect.left) * (canvas.width / rect.width);
@@ -2577,13 +2602,21 @@ function showTip(msg) {
 
 function saveToFile() {
   if (G.level !== null) captureLayout();
-  let data = { version: 2, timestamp: new Date().toISOString(), levelIdx: G.levelIdx, completed: [...G.completed], introSeen: [...introSeen], levelLayouts: G.levelLayouts };
+  let isFree = G.level && G.level.freeMode;
+  let data = {
+    version: 3, timestamp: new Date().toISOString(),
+    mode: isFree ? 'free' : 'level',
+    levelIdx: isFree ? -1 : G.levelIdx,
+    completed: [...G.completed], introSeen: [...introSeen],
+    levelLayouts: isFree ? {} : G.levelLayouts,
+    freeLayout: isFree ? (G.levelLayouts['free'] || []) : (G.levelLayouts['free'] || null),
+  };
   let blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   let url = URL.createObjectURL(blob);
   let a = document.createElement('a'); a.href = url;
   let now = new Date();
   let stamp = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + '_' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
-  a.download = '红石存档_' + stamp + '.json';
+  a.download = (isFree ? '自由模式存档_' : '红石存档_') + stamp + '.json';
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   showTip('存档已保存！');
 }
@@ -2597,12 +2630,18 @@ function loadFromFile(file) {
       localStorage.setItem('rs_completed', JSON.stringify([...G.completed]));
       introSeen = new Set(data.introSeen || []);
       localStorage.setItem('rs_intro_seen', JSON.stringify([...introSeen]));
-      G.levelLayouts = data.levelLayouts || {};
-      let targetIdx = data.levelIdx;
-      if (targetIdx === undefined || targetIdx === null) targetIdx = 0;
-      if (targetIdx === -1) {
-        loadFreeMode();
+      // 合并存档布局：保留当前已有的自由模式布局，再合并存档中的布局
+      if (data.levelLayouts) {
+        for (let k in data.levelLayouts) G.levelLayouts[k] = data.levelLayouts[k];
+      }
+      if (data.freeLayout) G.levelLayouts['free'] = data.freeLayout;
+      // 根据存档模式加载对应内容
+      let isFree = data.mode === 'free' || data.levelIdx === -1;
+      if (isFree) {
+        loadFreeMode(true); // skipCapture=true，避免覆盖刚从存档读取的布局
       } else {
+        let targetIdx = data.levelIdx;
+        if (targetIdx === undefined || targetIdx === null) targetIdx = 0;
         if (targetIdx >= LEVELS.length) targetIdx = 0;
         G.levelIdx = targetIdx; G.level = LEVELS[targetIdx]; G.selectedComp = null;
         initGrid(G.level); restoreLayout(targetIdx);
@@ -2659,8 +2698,8 @@ document.getElementById('homeFreeBtn').onclick = () => {
   playClick(); hideHome();
   loadFreeMode();
 };
-function loadFreeMode() {
-  if (G.level !== null) captureLayout();
+function loadFreeMode(skipCapture) {
+  if (G.level !== null && !skipCapture) captureLayout();
   let freeLevel = {
     name: '自由模式',
     desc: '自由搭建，开放所有零件，无对错判断',
@@ -2677,6 +2716,9 @@ function loadFreeMode() {
       let c = G.grid[item.x][item.y];
       if (c.type === T.INPUT || c.type === T.OUTPUT) continue;
       c.type = item.type; c.direction = item.direction || 0; c.delay = item.delay || 1; c.mode = item.mode || 'compare';
+      c.outputActive=false; c.prevInput=false; c.eventQueue=[]; c.extinguished=false;
+      c.pulsing=false; c.pulseTimer=0; c.prevFrontSignal=0; c.outputStrength=0; c.cooldown=0;
+      c.extended=false; c.pushedBlockType=null; c.pistonCooldown=0;
       c.buttonActive=false; c.buttonTimer=0; c.leverOn=item.leverOn||false;
       G.compCounts[item.type] = (G.compCounts[item.type] || 0) + 1;
     }
@@ -2684,8 +2726,8 @@ function loadFreeMode() {
   buildComponentBar(); buildLevelSelector(); updateInfoBar();
   document.getElementById('hint').textContent = '提示: 自由模式 — 放置红石火把/红石块作为信号源，用红石灯检测信号';
   document.getElementById('hint').style.color = '#4ecca3';
-  pauseSimulation(); resizeCanvas(); render();
-  if (!MP.syncing) sendToPeer({ t: 'level', idx: 0 });
+  pauseSimulation(); initRestingSignals(); resizeCanvas(); render();
+  if (!MP.syncing) sendToPeer({ t: 'level', idx: -1 });
 }
 // 生成随机关卡并加入LEVELS（在G初始化后）
 LEVELS.push(generateRandomLevel());
