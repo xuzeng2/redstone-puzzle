@@ -1,182 +1,662 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>红石逻辑解谜 · 导航</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      background: #0d1117;
-      color: #e0e0e0;
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem 1.5rem;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>红石逻辑解谜 · 整合导航</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-    .nav-card {
-      max-width: 720px;
-      width: 100%;
-      background: rgba(22, 33, 62, 0.8);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      border-radius: 24px;
-      padding: 2.8rem 2.8rem;
-      border: 1px solid rgba(78, 204, 163, 0.15);
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(233, 69, 96, 0.1);
-      text-align: center;
-    }
+        body {
+            background: #0d1117;
+            color: #e6edf3;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            line-height: 1.7;
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
-    .nav-card .logo {
-      font-size: 2.4rem;
-      font-weight: 700;
-      background: linear-gradient(135deg, #e94560, #ff6b8a);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing: 1px;
-      margin-bottom: 0.2rem;
-    }
-    .nav-card .sub {
-      color: #6a8aaa;
-      font-size: 0.9rem;
-      margin-bottom: 2rem;
-      border-bottom: 1px solid rgba(58, 90, 122, 0.3);
-      padding-bottom: 1rem;
-    }
+        .container {
+            max-width: 1100px;
+            width: 100%;
+            margin: 0 auto;
+        }
 
-    .nav-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-      margin: 1.2rem 0 0.8rem 0;
-    }
-    .nav-item {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 0.9rem 1rem;
-      border-radius: 14px;
-      background: rgba(13, 23, 33, 0.6);
-      border: 1px solid #1a2a3a;
-      text-decoration: none;
-      color: #d0dcec;
-      font-weight: 500;
-      font-size: 0.95rem;
-      transition: all 0.25s ease;
-      cursor: pointer;
-    }
-    .nav-item:hover {
-      border-color: #4ecca3;
-      transform: translateY(-3px);
-      box-shadow: 0 8px 25px rgba(78, 204, 163, 0.08);
-      background: rgba(22, 33, 62, 0.8);
-    }
-    .nav-item .icon {
-      font-size: 1.3rem;
-    }
-    .nav-item.primary {
-      background: #e94560;
-      border-color: #e94560;
-      color: #fff;
-    }
-    .nav-item.primary:hover {
-      background: #ff5570;
-      border-color: #ff5570;
-      box-shadow: 0 0 20px rgba(233, 69, 96, 0.2);
-    }
-    .nav-item.outline {
-      border-color: #4ecca3;
-      color: #4ecca3;
-    }
-    .nav-item.outline:hover {
-      background: #4ecca3;
-      color: #0d1117;
-    }
-    .nav-item.full {
-      grid-column: 1 / -1;
-    }
+        /* ---- 头部卡片 (融合导航与品牌) ---- */
+        .hero-card {
+            background: rgba(22, 33, 62, 0.75);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border-radius: 32px;
+            border: 1px solid rgba(78, 204, 163, 0.12);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(233, 69, 96, 0.08);
+            padding: 2.8rem 2.8rem 2rem;
+            margin-bottom: 2.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
 
-    .nav-divider {
-      grid-column: 1 / -1;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, #2a4a6a, transparent);
-      margin: 4px 0;
-    }
+        .hero-card:hover {
+            border-color: rgba(78, 204, 163, 0.25);
+            box-shadow: 0 24px 72px rgba(0, 0, 0, 0.7);
+        }
 
-    .footer-hint {
-      margin-top: 1.8rem;
-      font-size: 0.75rem;
-      color: #4a6a8a;
-      border-top: 1px solid rgba(58, 90, 122, 0.2);
-      padding-top: 1.2rem;
-    }
+        .hero-card .logo {
+            font-size: 2.8rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #e94560, #ff6b8a);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 1px;
+            margin-bottom: 0.2rem;
+        }
 
-    @media (max-width: 520px) {
-      .nav-card { padding: 1.8rem 1.2rem; }
-      .nav-grid { grid-template-columns: 1fr; }
-      .nav-item.full { grid-column: 1; }
-      .nav-card .logo { font-size: 1.8rem; }
-    }
-  </style>
+        .hero-card .sub {
+            color: #6a8aaa;
+            font-size: 1rem;
+            margin-bottom: 1.6rem;
+            border-bottom: 1px solid rgba(58, 90, 122, 0.25);
+            padding-bottom: 1rem;
+        }
+
+        .badge-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 0.6rem 0 1.6rem;
+        }
+
+        .badge {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 20px;
+            padding: 4px 16px;
+            font-size: 13px;
+            color: #8b949e;
+            transition: all 0.25s ease;
+            cursor: default;
+        }
+
+        .badge:hover {
+            border-color: #e94560;
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 4px 16px rgba(233, 69, 96, 0.12);
+        }
+
+        .badge strong {
+            color: #f0f6fc;
+        }
+
+        .btn-start {
+            display: inline-block;
+            padding: 14px 42px;
+            background: linear-gradient(135deg, #e94560, #c73e54);
+            border: none;
+            border-radius: 40px;
+            color: #fff;
+            font-weight: 600;
+            font-size: 1.2rem;
+            letter-spacing: 1px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 24px rgba(233, 69, 96, 0.3);
+            margin-top: 0.2rem;
+        }
+
+        .btn-start:hover {
+            transform: scale(1.04) translateY(-2px);
+            box-shadow: 0 8px 36px rgba(233, 69, 96, 0.5);
+            background: linear-gradient(135deg, #ff6b6b, #e94560);
+        }
+
+        /* ---- 导航网格 (融合原导航页) ---- */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 14px;
+            margin: 1.8rem 0 1.2rem;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 0.9rem 1rem;
+            border-radius: 16px;
+            background: rgba(13, 23, 33, 0.6);
+            border: 1px solid #1a2a3a;
+            text-decoration: none;
+            color: #d0dcec;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: all 0.25s ease;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .nav-item:hover {
+            border-color: #4ecca3;
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(78, 204, 163, 0.08);
+            background: rgba(22, 33, 62, 0.8);
+        }
+
+        .nav-item .icon {
+            font-size: 1.3rem;
+        }
+
+        .nav-item.primary {
+            background: #e94560;
+            border-color: #e94560;
+            color: #fff;
+        }
+
+        .nav-item.primary:hover {
+            background: #ff5570;
+            border-color: #ff5570;
+            box-shadow: 0 0 24px rgba(233, 69, 96, 0.25);
+        }
+
+        .nav-item.outline {
+            border-color: #4ecca3;
+            color: #4ecca3;
+        }
+
+        .nav-item.outline:hover {
+            background: #4ecca3;
+            color: #0d1117;
+        }
+
+        .nav-item.full {
+            grid-column: 1 / -1;
+        }
+
+        .nav-divider {
+            grid-column: 1 / -1;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, #2a4a6a, transparent);
+            margin: 2px 0;
+        }
+
+        .nav-item.label {
+            cursor: default;
+            background: rgba(13, 23, 33, 0.3);
+            border-color: #1a2a3a;
+            color: #6a8aaa;
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+        }
+
+        /* ---- 文档内容 (融合 docs.html) ---- */
+        .docs-section {
+            margin-top: 2.8rem;
+            padding-top: 1.2rem;
+            border-top: 1px solid #21262d;
+        }
+
+        .docs-section h2 {
+            font-size: 28px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #21262d;
+            color: #f0f6fc;
+            display: inline-block;
+            position: relative;
+        }
+
+        .docs-section h2::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 40%;
+            height: 2px;
+            background: linear-gradient(90deg, #e94560, transparent);
+        }
+
+        .docs-section h3 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-top: 32px;
+            margin-bottom: 12px;
+            color: #e6edf3;
+        }
+
+        .docs-section h4 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 24px;
+            margin-bottom: 8px;
+            color: #c9d1d9;
+        }
+
+        .docs-section p, .docs-section li {
+            color: #c9d1d9;
+        }
+
+        .docs-section ul, .docs-section ol {
+            padding-left: 24px;
+            margin: 12px 0;
+        }
+
+        .docs-section li {
+            margin-bottom: 4px;
+        }
+
+        .docs-section .card {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 10px;
+            padding: 18px 22px;
+            margin: 16px 0;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .docs-section .card:hover {
+            border-color: #30363d;
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+
+        .docs-section .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(180deg, #e94560, #ff6b6b);
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+
+        .docs-section .card:hover::before {
+            opacity: 1;
+        }
+
+        .docs-section .code-block {
+            background: #161b22;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin: 12px 0 20px;
+            overflow-x: auto;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 13px;
+            line-height: 1.8;
+            color: #e6edf3;
+            white-space: pre-wrap;
+            word-break: break-all;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .docs-section .code-block:hover {
+            border-color: #e94560;
+            box-shadow: 0 0 0 2px rgba(233, 69, 96, 0.08);
+        }
+
+        .docs-section .code-block .comment { color: #8b949e; }
+        .docs-section .code-block .key { color: #f0883e; }
+        .docs-section .code-block .string { color: #a5d6ff; }
+        .docs-section .code-block .num { color: #f0883e; }
+
+        .docs-section table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0 24px;
+            font-size: 14px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .docs-section th, .docs-section td {
+            border: 1px solid #21262d;
+            padding: 10px 14px;
+            text-align: left;
+        }
+
+        .docs-section th {
+            background: #161b22;
+            color: #f0f6fc;
+            font-weight: 600;
+        }
+
+        .docs-section td {
+            color: #c9d1d9;
+        }
+
+        .docs-section tr {
+            transition: background 0.2s ease;
+        }
+
+        .docs-section tr:hover td {
+            background: #1c2333;
+        }
+
+        .tag {
+            display: inline-block;
+            background: #1c2333;
+            border: 1px solid #30363d;
+            border-radius: 12px;
+            padding: 0 12px;
+            font-size: 12px;
+            color: #8b949e;
+            font-family: 'SF Mono', monospace;
+            transition: all 0.2s ease;
+        }
+
+        .tag-blue { border-color: #58a6ff; color: #58a6ff; }
+        .tag-green { border-color: #3fb950; color: #3fb950; }
+        .tag-red { border-color: #e94560; color: #e94560; }
+        .tag-yellow { border-color: #d29922; color: #d29922; }
+
+        .highlight {
+            background: #161b22;
+            border-radius: 6px;
+            padding: 2px 8px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            color: #f0883e;
+            border: 1px solid #21262d;
+        }
+
+        .footer {
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid #21262d;
+            text-align: center;
+            color: #8b949e;
+            font-size: 14px;
+        }
+
+        .footer .tags {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        /* ---- 响应式 ---- */
+        @media (max-width: 768px) {
+            .hero-card { padding: 1.8rem 1.2rem; }
+            .hero-card .logo { font-size: 2rem; }
+            .nav-grid { grid-template-columns: 1fr 1fr; }
+            .nav-item.full { grid-column: 1 / -1; }
+            .docs-section h2 { font-size: 22px; }
+            table { font-size: 12px; }
+            th, td { padding: 6px 10px; }
+        }
+
+        @media (max-width: 480px) {
+            .nav-grid { grid-template-columns: 1fr; }
+            .badge-group .badge { font-size: 11px; padding: 2px 12px; }
+            .btn-start { font-size: 1rem; padding: 12px 28px; }
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #484f58; }
+    </style>
 </head>
 <body>
 
-<div class="nav-card">
-  <div class="logo">⚡ 红石逻辑解谜</div>
-  <div class="sub">快速导航 · 项目入口</div>
+<div class="container">
+    <!-- ========== 英雄卡片 ========== -->
+    <div class="hero-card">
+        <div class="logo">⚡ 红石逻辑解谜</div>
+        <div class="sub">快速导航 · 项目入口 · 完整文档</div>
 
-  <div class="nav-grid">
+        <div class="badge-group">
+            <span class="badge"><strong>版本</strong> 2.0</span>
+            <span class="badge"><strong>类型</strong> 单页应用 + 关卡编辑器</span>
+            <span class="badge"><strong>技术</strong> HTML5 · Canvas · WebRTC</span>
+            <span class="badge"><strong>许可</strong> MIT</span>
+        </div>
 
-    <!-- 主入口 -->
-    <a href="redstone-puzzle.html" class="nav-item primary full">
-      <span class="icon">🎮</span> 打开游戏
-    </a>
+        <a href="redstone-puzzle.html" class="btn-start">🎮 打开游戏</a>
 
-    <!-- 功能列表 -->
-    <a href="#" class="nav-item full" style="cursor:default; background:rgba(13,23,33,0.3); border-color:#1a2a3a; color:#6a8aaa;">
-      <span style="font-size:0.75rem;">— 项目资源 —</span>
-    </a>
+        <!-- ========== 导航网格 (整合原导航) ========== -->
+        <div class="nav-grid">
+            <!-- 主入口已在上方，这里放资源入口 -->
+            <a href="#" class="nav-item label full" style="grid-column:1/-1; margin-top:0.8rem;">— 项目资源 —</a>
 
-    <!-- 各功能项 -->
-    <a href="gen_redstone_game.py" class="nav-item outline">
-      <span class="icon">🐍</span> 生成器脚本
-    </a>
-    <a href="levels_example.json" class="nav-item">
-      <span class="icon">📦</span> 示例关卡json文件
-    </a>
-    <a href="logs.html" class="nav-item">
-      <span class="icon">📖</span> 跟新日志
-    </a>
-    <a href="docs.html" class="nav-item">
-      <span class="icon">📋</span> 文档
-    </a>
-	<a href="https://github.com/xuzeng2/redstone-puzzle" class="nav-item">
-      <span class="icon">code</span> github项目
-    </a>
-	<a href="#" class="nav-item" onclick="alert('不是，我还没发视频呢，你急啥'); return false;">
-      <span class="icon">B站</span> 视频
-    </a>
-    <div class="nav-divider"></div>
+            <a href="gen_redstone_game.py" class="nav-item outline">
+                <span class="icon">🐍</span> 生成器脚本
+            </a>
+            <a href="levels_example.json" class="nav-item">
+                <span class="icon">📦</span> 示例关卡json
+            </a>
+            <a href="logs.html" class="nav-item">
+                <span class="icon">📖</span> 更新日志
+            </a>
+            <a href="docs.html" class="nav-item">
+                <span class="icon">📋</span> 文档（独立）
+            </a>
+            <a href="https://github.com/xuzeng2/redstone-puzzle" class="nav-item">
+                <span class="icon">💻</span> GitHub
+            </a>
+            <a href="#" class="nav-item" onclick="alert('不是，我还没发视频呢，你急啥'); return false;">
+                <span class="icon">📺</span> B站视频
+            </a>
 
-    <!-- 外部链接 -->
-    <a href="https://minecraft.fandom.com/wiki/Redstone_circuit" target="_blank" class="nav-item full" style="border-color:#2a4a6a; color:#7a9aaa;">
-      <span class="icon">🔗</span> Minecraft 红石 Wiki
-    </a>
-  </div>
+            <div class="nav-divider"></div>
 
-  <div class="footer-hint">
-    ⚡ 用电路诠释逻辑 · MIT © 2026   联系作者3915266537@qq.com
-  </div>
+            <a href="https://minecraft.fandom.com/wiki/Redstone_circuit" target="_blank" class="nav-item full" style="border-color:#2a4a6a; color:#7a9aaa;">
+                <span class="icon">🔗</span> Minecraft 红石 Wiki
+            </a>
+        </div>
+    </div>
+
+    <!-- ========== 文档内容 (精简自 docs.html) ========== -->
+    <div class="docs-section">
+        <h2>📖 项目概述</h2>
+        <p>
+            <strong>红石逻辑解谜</strong> 是一个基于 <strong>Minecraft 红石电路</strong> 逻辑的
+            <strong>交互式解谜游戏</strong> 和 <strong>关卡设计工具</strong>。
+            玩家需要在网格上摆放红石元件（红石粉、中继器、比较器、火把等），
+            将输入信号以正确的 <strong>延迟</strong>、<strong>持续时间</strong>
+            和 <strong>信号强度</strong> 传递到输出端。
+            项目同时提供了 <strong>可视化关卡编辑器</strong>（Python/Tkinter），
+            可自由设计关卡并导出为 JSON 格式，再通过生成器编译为可独立运行的 HTML 游戏。
+        </p>
+        <div style="margin: 18px 0 12px;">
+            <span class="tag tag-blue">🎯 核心目标</span>
+            <span class="tag tag-green">🧩 12种元件</span>
+            <span class="tag tag-red">🌐 WebRTC联机</span>
+            <span class="tag tag-yellow">🛠️ 完整工具链</span>
+        </div>
+
+        <!-- ====== 功能 ====== -->
+        <h2>✨ 功能</h2>
+        <h3>🎮 游戏功能</h3>
+        <ul>
+            <li><strong>19+ 内置关卡</strong>：从基础红石粉连线到逻辑门（与门、或门、非门），难度循序渐进。</li>
+            <li><strong>实时信号模拟</strong>：120ms/tick 的离散时间步进，精确模拟红石信号传播、衰减、中继器延迟、比较器运算、活塞推拉。</li>
+            <li><strong>信号可视化</strong>：红石粉上显示信号强度（1–15），信号流动动画，输出点状态指示。</li>
+            <li><strong>播放/暂停/单步</strong>：可控制模拟速度，逐 tick 调试电路。</li>
+            <li><strong>元件限制</strong>：每个关卡可设置每种元件的最大使用数量，增加策略性。</li>
+            <li><strong>存档/读档</strong>：保存当前进度和电路布局，支持 JSON 存档文件导入导出。</li>
+            <li><strong>自由模式</strong>：20×12 大画布，开放所有元件，无对错限制，自由搭建电路。</li>
+            <li><strong>元件教程</strong>：首次解锁新元件时弹出介绍弹窗，包含用途说明和操作提示。</li>
+        </ul>
+
+        <h3>🛠️ 关卡编辑器 (<span class="highlight">do_game.py</span>)</h3>
+        <ul>
+            <li><strong>可视化设计</strong>：Tkinter 图形界面，拖拽放置元件，设置输入/输出点。</li>
+            <li><strong>元件限制管理</strong>：为每种元件设置数量上限，禁用不使用的元件。</li>
+            <li><strong>多输入支持</strong>：支持 2 个以上输入点，可独立配置延迟偏移、持续时间和强度。</li>
+            <li><strong>目标参数配置</strong>：设置目标延迟、持续时间和可选的信号强度。</li>
+            <li><strong>即时仿真</strong>：在编辑器中即可运行模拟，验证关卡是否可解。</li>
+            <li><strong>导入/导出 JSON</strong>：关卡数据保存为 JSON 格式，便于版本管理和分享。</li>
+        </ul>
+
+        <h3>🌐 联机功能</h3>
+        <ul>
+            <li><strong>P2P 连接</strong>：基于 simple-peer 库的 WebRTC 点对点连接，无需服务器。</li>
+            <li><strong>分区域协作</strong>：玩家1（主机）负责左半区，玩家2（加入方）负责右半区。</li>
+            <li><strong>实时同步</strong>：元件放置/移除/修改、模拟控制、关卡切换等操作实时同步。</li>
+            <li><strong>聊天系统</strong>：文字聊天 + 语音消息（浏览器录音），增强协作体验。</li>
+            <li><strong>队友光标</strong>：显示队友的鼠标位置，便于沟通。</li>
+        </ul>
+
+        <!-- ====== 玩法 ====== -->
+        <h2>🎮 玩法</h2>
+        <ol>
+            <li><strong>选择关卡</strong>：从顶部关卡栏选择关卡（1–19+），或从主页进入。</li>
+            <li><strong>理解目标</strong>：信息栏显示目标延迟、持续时间和可选信号强度。</li>
+            <li><strong>选择元件</strong>：从右侧元件栏选择可用元件，受限元件会显示剩余数量。</li>
+            <li><strong>放置元件</strong>：左键点击网格放置当前选中的元件，右键移除元件。</li>
+            <li><strong>调整方向</strong>：按 <kbd>R</kbd> 键旋转元件方向（中继器/比较器/火把等有方向性）。</li>
+            <li><strong>修改参数</strong>：点击已放置的中继器可调整延迟档位（1–4），点击比较器切换比较/减法模式。</li>
+            <li><strong>运行模拟</strong>：点击「播放」按钮运行电路，观察信号传播，点击「单步」逐 tick 调试。</li>
+            <li><strong>过关条件</strong>：当输出信号的延迟、持续时间和强度（若有）全部匹配目标值时，即过关。</li>
+        </ol>
+        <div class="card">
+            <p><strong>💡 提示：</strong>信号强度会随红石粉距离衰减（每格 -1），使用中继器可恢复强度至 15。
+            中继器延迟档位 = 1–4 tick，实际延迟 = 档位 + 1 tick。</p>
+        </div>
+
+        <!-- ====== 元件 ====== -->
+        <h2>🧩 元件列表</h2>
+        <table>
+            <thead><tr><th>元件</th><th>标识</th><th>功能</th><th>方向性</th><th>可调参数</th></tr></thead>
+            <tbody>
+                <tr><td>红石粉</td><td><span class="tag">dust</span></td><td>信号传输，每格衰减 1，延迟 1 tick</td><td>否</td><td>—</td></tr>
+                <tr><td>红石块</td><td><span class="tag">block</span></td><td>永久信号源（强度 15）</td><td>否</td><td>—</td></tr>
+                <tr><td>红石火把</td><td><span class="tag">torch</span></td><td>反相器：背面有信号则熄灭</td><td>是</td><td>方向</td></tr>
+                <tr><td>中继器</td><td><span class="tag">repeater</span></td><td>单向信号放大，延迟 1–4 tick</td><td>是</td><td>方向 · 档位</td></tr>
+                <tr><td>比较器</td><td><span class="tag">comparator</span></td><td>比较/减法模式，处理信号强度</td><td>是</td><td>方向 · 模式</td></tr>
+                <tr><td>侦测器</td><td><span class="tag">observer</span></td><td>检测前方信号上升沿，输出 2 tick 脉冲</td><td>是</td><td>方向</td></tr>
+                <tr><td>石头</td><td><span class="tag">stone</span></td><td>可被中继器充能（强度 15）</td><td>否</td><td>—</td></tr>
+                <tr><td>粘性活塞</td><td><span class="tag">piston</span></td><td>推拉石头/红石块</td><td>是</td><td>方向</td></tr>
+                <tr><td>红石灯</td><td><span class="tag">lamp</span></td><td>信号指示：有信号则亮起</td><td>否</td><td>—</td></tr>
+                <tr><td>按钮</td><td><span class="tag">button</span></td><td>瞬时信号源（5 tick）</td><td>否</td><td>点击激活</td></tr>
+                <tr><td>拉杆</td><td><span class="tag">lever</span></td><td>持久信号源（开关）</td><td>否</td><td>点击切换</td></tr>
+            </tbody>
+        </table>
+
+        <!-- ====== 关卡格式 ====== -->
+        <h2>📁 关卡定义格式</h2>
+        <p>关卡数据以 JSON 格式定义，支持单输入和多输入两种模式。</p>
+        <h3>完整字段说明</h3>
+        <table>
+            <thead><tr><th>字段</th><th>类型</th><th>必填</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><span class="highlight">name</span></td><td>string</td><td>✅</td><td>关卡名称</td></tr>
+                <tr><td><span class="highlight">desc</span></td><td>string</td><td>✅</td><td>关卡描述</td></tr>
+                <tr><td><span class="highlight">cols</span> / <span class="highlight">rows</span></td><td>int</td><td>✅</td><td>网格列数/行数</td></tr>
+                <tr><td><span class="highlight">input</span></td><td>object</td><td>⭕</td><td>单输入：{x, y, duration, strength}</td></tr>
+                <tr><td><span class="highlight">inputs</span></td><td>array</td><td>⭕</td><td>多输入：[{x, y, duration, strength, delay}]</td></tr>
+                <tr><td><span class="highlight">output</span></td><td>object</td><td>✅</td><td>输出点：{x, y}</td></tr>
+                <tr><td><span class="highlight">target</span></td><td>object</td><td>✅</td><td>目标：{delay, duration, strength?}</td></tr>
+                <tr><td><span class="highlight">components</span></td><td>array</td><td>✅</td><td>可用元件列表</td></tr>
+                <tr><td><span class="highlight">limits</span></td><td>object</td><td>⭕</td><td>元件数量限制</td></tr>
+                <tr><td><span class="highlight">hint</span></td><td>string</td><td>✅</td><td>通关提示</td></tr>
+                <tr><td><span class="highlight">par</span></td><td>int</td><td>⭕</td><td>推荐元件数（星级评价）</td></tr>
+                <tr><td><span class="highlight">logic</span></td><td>string</td><td>⭕</td><td>逻辑门类型：not / or / and</td></tr>
+                <tr><td><span class="highlight">preplaced</span></td><td>array</td><td>⭕</td><td>预放置元件（玩家不可移除）</td></tr>
+            </tbody>
+        </table>
+
+        <h3>示例：单输入关卡</h3>
+        <div class="code-block">{
+  <span class="key">"name"</span>: <span class="string">"初识红石"</span>,
+  <span class="key">"desc"</span>: <span class="string">"用红石粉连接输入和输出"</span>,
+  <span class="key">"cols"</span>: <span class="num">8</span>, <span class="key">"rows"</span>: <span class="num">6</span>,
+  <span class="key">"input"</span>: {<span class="key">"x"</span>: <span class="num">1</span>, <span class="key">"y"</span>: <span class="num">3</span>, <span class="key">"duration"</span>: <span class="num">10</span>, <span class="key">"strength"</span>: <span class="num">15</span>},
+  <span class="key">"output"</span>: {<span class="key">"x"</span>: <span class="num">6</span>, <span class="key">"y"</span>: <span class="num">3</span>},
+  <span class="key">"target"</span>: {<span class="key">"delay"</span>: <span class="num">4</span>, <span class="key">"duration"</span>: <span class="num">10</span>},
+  <span class="key">"components"</span>: [<span class="string">"dust"</span>],
+  <span class="key">"hint"</span>: <span class="string">"选中红石粉，点击网格放置"</span>
+}</div>
+
+        <!-- ====== 工具链 ====== -->
+        <h2>🛠️ 工具链</h2>
+        <h3>1. 关卡设计器 (<span class="highlight">do_game.py</span>)</h3>
+        <p>Python + Tkinter 编写的可视化关卡编辑器。</p>
+        <ul>
+            <li><strong>启动</strong>：<span class="highlight">python do_game.py</span></li>
+            <li><strong>功能</strong>：拖放元件、设置输入/输出、配置目标、运行模拟验证。</li>
+            <li><strong>输出</strong>：导出 <span class="highlight">.json</span> 关卡定义文件。</li>
+        </ul>
+        <h3>2. 游戏生成器 (<span class="highlight">gen_redstone_game.py</span>)</h3>
+        <ul>
+            <li><strong>用法</strong>：<span class="highlight">python gen_redstone_game.py levels.json output.html</span></li>
+            <li><strong>输出</strong>：一个包含完整游戏引擎和所有关卡的 <span class="highlight">.html</span> 文件。</li>
+        </ul>
+
+        <!-- ====== 联机 ====== -->
+        <h2>🌐 联机模式</h2>
+        <p>联机功能基于 <strong>WebRTC</strong> 和 <strong>simple-peer</strong> 库，实现点对点连接。</p>
+        <h3>连接流程</h3>
+        <ol>
+            <li><strong>主机（P1）</strong>：点击「创建房间」，生成邀请码（Signal 数据）。</li>
+            <li><strong>加入方（P2）</strong>：点击「加入房间」，粘贴主机提供的邀请码。</li>
+            <li>加入方生成应答码，主机粘贴应答码完成连接。</li>
+            <li>连接建立后，双方各自负责左/右半区，操作实时同步。</li>
+        </ol>
+        <div class="card">
+            <p><strong>⚠️ 注意：</strong>联机需要双方网络支持 WebRTC（通常需要公网 IP 或 NAT 穿透）。</p>
+        </div>
+
+        <!-- ====== 技术 ====== -->
+        <h2>⚙️ 技术架构</h2>
+        <table>
+            <thead><tr><th>层面</th><th>技术</th><th>说明</th></tr></thead>
+            <tbody>
+                <tr><td><strong>前端</strong></td><td>HTML5 · CSS3 · JavaScript (ES6+)</td><td>单页应用，无框架依赖</td></tr>
+                <tr><td><strong>渲染</strong></td><td>Canvas 2D</td><td>栅格化电路绘制</td></tr>
+                <tr><td><strong>音频</strong></td><td>Web Audio API</td><td>音效播放</td></tr>
+                <tr><td><strong>联机</strong></td><td>WebRTC · simple-peer</td><td>P2P 数据传输</td></tr>
+                <tr><td><strong>语音</strong></td><td>MediaRecorder API</td><td>浏览器录音</td></tr>
+                <tr><td><strong>存储</strong></td><td>localStorage</td><td>进度/存档持久化</td></tr>
+                <tr><td><strong>编辑器</strong></td><td>Python 3 · Tkinter</td><td>可视化关卡设计</td></tr>
+                <tr><td><strong>数据格式</strong></td><td>JSON</td><td>关卡定义、存档</td></tr>
+            </tbody>
+        </table>
+
+        <!-- ====== 文件结构 ====== -->
+        <h2>📂 文件结构</h2>
+        <div class="code-block">redstone-puzzle/
+├── <strong>redstone-puzzle.html</strong>      # 游戏主文件
+├── <strong>do_game.py</strong>               # 关卡编辑器
+├── <strong>gen_redstone_game.py</strong>     # 游戏生成器
+├── <strong>levels_example.json</strong>      # 关卡定义示例
+├── <strong>cleared_game.json</strong>        # 全通关存档示例
+├── <strong>docs.html</strong>                # 项目文档（独立）
+└── <strong>index.html</strong>               # 整合导航（本文件）</div>
+    </div>
+
+    <!-- ========== 页脚 ========== -->
+    <footer class="footer">
+        <p>⚡ 红石逻辑解谜 · Redstone Logic Puzzle</p>
+        <div class="tags">
+            <span class="tag">HTML5</span>
+            <span class="tag">Canvas</span>
+            <span class="tag">WebRTC</span>
+            <span class="tag">Python</span>
+            <span class="tag">Tkinter</span>
+        </div>
+        <p style="margin-top:10px; font-size:13px; color:#484f58;">
+            MIT © 2026 · 联系作者 3915266537@qq.com
+        </p>
+    </footer>
 </div>
 
 </body>
