@@ -105,6 +105,7 @@
   #introModal .panel {
     background:#16213e; border:3px solid #e94560; border-radius:8px;
     padding:24px 32px; text-align:center; max-width:440px;
+    max-height:85vh; overflow-y:auto;
   }
   #introModal h2 { color:#e94560; font-size:20px; margin-bottom:6px; }
   #introModal .subtitle { color:#888; font-size:12px; margin-bottom:14px; }
@@ -403,13 +404,18 @@
     }
     body.chat-open { padding-left:0 !important; padding-bottom:200px; }
     /* 弹窗缩小 */
-    #winModal .panel, #failModal .panel, #finalModal .panel { padding:24px 20px; max-width:90vw; }
+    #winModal .panel, #failModal .panel, #finalModal .panel { padding:24px 20px; max-width:90vw; max-height:85vh; overflow-y:auto; }
     #winModal h2 { font-size:28px; }
     #winModal p { font-size:14px; }
     #finalModal h2 { font-size:36px; }
     #finalModal p { font-size:16px; }
-    #introModal .panel { padding:16px 20px; max-width:90vw; }
-    #onlineModal .panel { padding:16px 20px; max-width:90vw; }
+    #introModal .panel { padding:14px 16px; max-width:92vw; max-height:80vh; overflow-y:auto; }
+    #introModal h2 { font-size:16px; margin-bottom:4px; }
+    #introModal .subtitle { font-size:10px; margin-bottom:8px; }
+    #introModal .intro-desc { font-size:12px; line-height:1.6; margin-bottom:10px; }
+    #introModal .intro-tip { font-size:11px; margin-bottom:10px; }
+    #introModal .btn { font-size:14px; padding:10px 24px; }
+    #onlineModal .panel { padding:16px 20px; max-width:90vw; max-height:85vh; overflow-y:auto; }
     /* 主页适配 */
     #homePage .home-title { font-size:32px; }
     #homePage .home-subtitle { font-size:13px; }
