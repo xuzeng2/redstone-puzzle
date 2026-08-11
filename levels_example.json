@@ -400,8 +400,8 @@
         "y": 4
       },
       "target": {
-        "delay": 8,
-        "duration": 11,
+        "delay": 5,
+        "duration": 15,
         "strength": 5
       },
       "components": [
@@ -426,7 +426,7 @@
           "y": 4,
           "duration": 15,
           "strength": 15,
-          "delay": 0
+          "delay": 1
         }
       ]
     },
@@ -440,8 +440,8 @@
         "y": 4
       },
       "target": {
-        "delay": 31,
-        "duration": 1
+        "delay": 5,
+        "duration": 15
       },
       "components": [
         "dust",
@@ -512,7 +512,7 @@
       "limits": {
         "dust": 14,
         "repeater": 2,
-        "comparator": 1
+        "comparator": 3
       },
       "hint": "无",
       "par": 5,
@@ -690,16 +690,11 @@
       },
       "target": {
         "delay": 8,
-        "duration": 15
+        "duration": 16
       },
       "components": [
         "dust",
         "block",
-        "torch",
-        "repeater",
-        "comparator",
-        "observer",
-        "stone",
         "piston"
       ],
       "limits": {},
