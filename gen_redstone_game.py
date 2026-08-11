@@ -540,7 +540,7 @@ HTML_TEMPLATE = r'''<!DOCTYPE html>
 </div>
 
 <div id="controls">
-  <button class="btn primary" id="playBtn">&#9654; 播放</button>
+  <button class="btn primary" id="playBtn">&#9654; 运行</button>
   <button class="btn" id="resetBtn">&#8634; 重置</button>
   <button class="btn" id="stepBtn">&#9193; 单步</button>
   <button class="btn" id="rotateBtn">&#10227; 旋转(R)</button>
@@ -1770,7 +1770,7 @@ function startSimulation() {
   document.getElementById('playBtn').textContent = '\u23F8 暂停';
   G.timer = setInterval(() => { tickUpdate(); render(); }, TICK_MS);
 }
-function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.timer); G.timer = null; } if (!G.validating) document.getElementById('playBtn').textContent = '\u25B6 播放'; }
+function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.timer); G.timer = null; } if (!G.validating) document.getElementById('playBtn').textContent = '\u25B6 运行'; }
 
 // 静止状态下按钮实时倒计时
 let buttonRestTimer = null;

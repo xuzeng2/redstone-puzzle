@@ -472,7 +472,7 @@
 </div>
 
 <div id="controls">
-  <button class="btn primary" id="playBtn">&#9654; 播放</button>
+  <button class="btn primary" id="playBtn">&#9654; 运行</button>
   <button class="btn" id="resetBtn">&#8634; 重置</button>
   <button class="btn" id="stepBtn">&#9193; 单步</button>
   <button class="btn" id="rotateBtn">&#10227; 旋转(R)</button>
@@ -1418,12 +1418,12 @@ const LEVELS = [
     cols: 12, rows: 8,
     input: {"x": 1, "y": 4, "duration": 15, "strength": 15},
     output: {"x": 10, "y": 4},
-    target: {"delay": 3, "duration": 5},
-    components: ["dust", "torch"],
-    limits: {"dust": 10, "torch": 3},
+    target: {"delay": 0, "duration": 8},
+    components: ["dust", "block", "torch", "repeater", "comparator", "observer", "stone", "piston"],
+    limits: {"dust": 10},
     hint: "红石火把背面无信号时输出15。铺4格红石粉(2,4)-(5,4)接火把(6,4朝右)，再铺3格(7,4)-(9,4)到输出。火把先输出信号(延迟3)，输入到达后火把熄灭(持续5)",
-    par: 8,
-    logic: "not"
+    par: 13,
+    preplaced: [{"x": 2, "y": 4, "type": "dust", "direction": 0, "delay": 1, "mode": "compare"}, {"x": 3, "y": 4, "type": "dust", "direction": 0, "delay": 1, "mode": "compare"}, {"x": 4, "y": 4, "type": "dust", "direction": 0, "delay": 1, "mode": "compare"}, {"x": 5, "y": 4, "type": "dust", "direction": 0, "delay": 1, "mode": "compare"}, {"x": 6, "y": 4, "type": "torch", "direction": 0, "delay": 1, "mode": "compare"}, {"x": 7, "y": 4, "type": "dust", "direction": 0, "delay": 1, "mode": "compare"}, {"x": 8, "y": 4, "type": "dust", "direction": 0, "delay": 1, "mode": "compare"}, {"x": 9, "y": 4, "type": "dust", "direction": 0, "delay": 1, "mode": "compare"}]
   },
   {
     name: "逻辑或门",
@@ -1526,7 +1526,7 @@ const LEVELS = [
     components: ["dust", "torch"],
     limits: {"dust": 8, "torch": 3},
     hint: "T1(5,4朝右)反转输入，T2(8,4朝右)反转T1=同相。2格红石粉(2,4)-(4,4)接T1，2格(6,4)-(7,4)接T2，2格(9,4)-(10,4邻)。T1先灭→T2后亮→信号延迟到达输出约7tick",
-    par: 8,
+    par: 5,
     preplaced: []
   },
   {
@@ -1945,7 +1945,7 @@ function startSimulation() {
   document.getElementById('playBtn').textContent = '\u23F8 暂停';
   G.timer = setInterval(() => { tickUpdate(); render(); }, TICK_MS);
 }
-function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.timer); G.timer = null; } if (!G.validating) document.getElementById('playBtn').textContent = '\u25B6 播放'; }
+function pauseSimulation() { G.running = false; if (G.timer) { clearInterval(G.timer); G.timer = null; } if (!G.validating) document.getElementById('playBtn').textContent = '\u25B6 运行'; }
 
 // 静止状态下按钮实时倒计时
 let buttonRestTimer = null;

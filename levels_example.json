@@ -180,31 +180,101 @@
       "desc": "火把默认输出信号，输入信号到达后火把熄灭——利用反相特性制造短脉冲",
       "cols": 12,
       "rows": 8,
-      "input": {
-        "x": 1,
-        "y": 4,
-        "duration": 15,
-        "strength": 15
-      },
       "output": {
         "x": 10,
         "y": 4
       },
       "target": {
-        "delay": 3,
-        "duration": 5
+        "delay": 0,
+        "duration": 8
       },
       "components": [
         "dust",
-        "torch"
+        "block",
+        "torch",
+        "repeater",
+        "comparator",
+        "observer",
+        "stone",
+        "piston"
       ],
       "limits": {
-        "dust": 10,
-        "torch": 3
+        "dust": 10
       },
       "hint": "红石火把背面无信号时输出15。铺4格红石粉(2,4)-(5,4)接火把(6,4朝右)，再铺3格(7,4)-(9,4)到输出。火把先输出信号(延迟3)，输入到达后火把熄灭(持续5)",
-      "par": 8,
-      "logic": "not"
+      "par": 13,
+      "preplaced": [
+        {
+          "x": 2,
+          "y": 4,
+          "type": "dust",
+          "direction": 0,
+          "delay": 1,
+          "mode": "compare"
+        },
+        {
+          "x": 3,
+          "y": 4,
+          "type": "dust",
+          "direction": 0,
+          "delay": 1,
+          "mode": "compare"
+        },
+        {
+          "x": 4,
+          "y": 4,
+          "type": "dust",
+          "direction": 0,
+          "delay": 1,
+          "mode": "compare"
+        },
+        {
+          "x": 5,
+          "y": 4,
+          "type": "dust",
+          "direction": 0,
+          "delay": 1,
+          "mode": "compare"
+        },
+        {
+          "x": 6,
+          "y": 4,
+          "type": "torch",
+          "direction": 0,
+          "delay": 1,
+          "mode": "compare"
+        },
+        {
+          "x": 7,
+          "y": 4,
+          "type": "dust",
+          "direction": 0,
+          "delay": 1,
+          "mode": "compare"
+        },
+        {
+          "x": 8,
+          "y": 4,
+          "type": "dust",
+          "direction": 0,
+          "delay": 1,
+          "mode": "compare"
+        },
+        {
+          "x": 9,
+          "y": 4,
+          "type": "dust",
+          "direction": 0,
+          "delay": 1,
+          "mode": "compare"
+        }
+      ],
+      "input": {
+        "x": 1,
+        "y": 4,
+        "duration": 15,
+        "strength": 15
+      }
     },
     {
       "name": "逻辑或门",
@@ -469,12 +539,6 @@
       "desc": "两个火把串联=双重反相=同相输出，但增加延迟",
       "cols": 12,
       "rows": 8,
-      "input": {
-        "x": 1,
-        "y": 4,
-        "duration": 10,
-        "strength": 15
-      },
       "output": {
         "x": 10,
         "y": 4
@@ -492,8 +556,14 @@
         "torch": 3
       },
       "hint": "T1(5,4朝右)反转输入，T2(8,4朝右)反转T1=同相。2格红石粉(2,4)-(4,4)接T1，2格(6,4)-(7,4)接T2，2格(9,4)-(10,4邻)。T1先灭→T2后亮→信号延迟到达输出约7tick",
-      "par": 8,
-      "preplaced": []
+      "par": 5,
+      "preplaced": [],
+      "input": {
+        "x": 1,
+        "y": 4,
+        "duration": 10,
+        "strength": 15
+      }
     },
     {
       "name": "混合反相",
